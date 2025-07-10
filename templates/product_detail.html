@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ product.title }} - AliExpress Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">AliExpress Scraper</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                <a class="nav-link" href="{{ url_for('search_products') }}">Search</a>
+                <a class="nav-link" href="{{ url_for('manage_keywords') }}">Keywords</a>
+                <a class="nav-link" href="{{ url_for('scraping_logs') }}">Logs</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h1 class="card-title">{{ product.title }}</h1>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                {% if product.image_url %}
+                                <img src="{{ product.image_url }}" class="img-fluid rounded" alt="{{ product.title }}">
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {% set current_price = product.get_current_price() %}
+                                {% if current_price %}
+                                <div class="price-info mb-3">
+                                    <h3 class="text-success">{{ current_price.sale_price }} {{ product.currency }}</h3>
+                                    {% if current_price.original_price and current_price.original_price != current_price.sale_price %}
+                                    <p class="text-muted text-decoration-line-through">{{ current_price.original_price }} {{ product.currency }}</p>
+                                    {% endif %}
+                                    {% if current_price.discount_percentage %}
+                                    <span class="badge bg-danger fs-6">-{{ current_price.discount_percentage }}% OFF</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="product-info">
+                                    {% if product.rating %}
+                                    <p><strong>Rating:</strong> {{ product.rating }}/5</p>
+                                    {% endif %}
+                                    {% if product.orders_count %}
+                                    <p><strong>Orders:</strong> {{ product.orders_count }}</p>
+                                    {% endif %}
+                                    {% if product.store_name %}
+                                    <p><strong>Store:</strong> 
+                                        {% if product.store_url %}
+                                        <a href="{{ product.store_url }}" target="_blank">{{ product.store_name }}</a>
+                                        {% else %}
+                                        {{ product.store_name }}
+                                        {% endif %}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn {% if product.is_tracked %}btn-warning{% else %}btn-outline-warning{% endif %}" onclick="toggleTracking({{ product.id }}, this)" title="{% if product.is_tracked %}Stop tracking this product{% else %}Start tracking this product{% endif %}">
+                                            <i class="{% if product.is_tracked %}fas{% else %}far{% endif %} fa-star"></i>
+                                            {% if product.is_tracked %}Tracking{% else %}Track Product{% endif %}
+                                        </button>
+                                        <a href="{{ product.product_url }}" target="_blank" class="btn btn-primary flex-grow-1">
+                                            <i class="fas fa-external-link-alt"></i> View on AliExpress
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Product Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Product ID:</strong> {{ product.product_id }}</p>
+                        <p><strong>First Added:</strong> {{ product.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p><strong>Last Updated:</strong> {{ product.updated_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        {% if product.is_tracked %}
+                        <p><strong>Tracking Since:</strong> {{ product.tracked_since.strftime('%Y-%m-%d %H:%M') if product.tracked_since else 'Unknown' }}</p>
+                        {% endif %}
+                        {% if product.store_id %}
+                        <p><strong>Store ID:</strong> {{ product.store_id }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if price_history %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Price History (Last 30 Days)</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="priceChart" style="height: 400px;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Recent Price Updates</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if price_history %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Sale Price</th>
+                                        <th>Original Price</th>
+                                        <th>Discount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for price in price_history[-10:] %}
+                                    <tr>
+                                        <td>{{ price.date }}</td>
+                                        <td>{{ price.sale_price }} {{ product.currency }}</td>
+                                        <td>{{ price.original_price or '-' }} {{ product.currency if price.original_price else '' }}</td>
+                                        <td>
+                                            {% if price.discount %}
+                                            <span class="badge bg-danger">-{{ price.discount }}%</span>
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No price history available yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleTracking(productId, button) {
+            fetch(`/product/${productId}/toggle_tracking`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update button appearance
+                    if (data.is_tracked) {
+                        button.classList.remove('btn-outline-warning');
+                        button.classList.add('btn-warning');
+                        button.innerHTML = '<i class="fas fa-star"></i> Tracking';
+                        button.title = 'Stop tracking this product';
+                    } else {
+                        button.classList.remove('btn-warning');
+                        button.classList.add('btn-outline-warning');
+                        button.innerHTML = '<i class="far fa-star"></i> Track Product';
+                        button.title = 'Start tracking this product';
+                    }
+                    
+                    // Show success message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-check"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                    
+                    // Reload page after 2 seconds to show updated tracking status
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the product.');
+            });
+        }
+    </script>
+    
+    {% if price_history %}
+    <script>
+        // Price history chart
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        const priceHistory = {{ price_history | tojson }};
+        
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: priceHistory.map(p => p.date),
+                datasets: [{
+                    label: 'Sale Price',
+                    data: priceHistory.map(p => p.sale_price),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }, {
+                    label: 'Original Price',
+                    data: priceHistory.map(p => p.original_price),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Price History'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Price ({{ product.currency }})'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

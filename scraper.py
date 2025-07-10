@@ -9,6 +9,8 @@ from typing import Generator
 import threading
 from queue import Queue
 import time
+from models import db, Product, PriceHistory, SearchKeyword, ScrapingLog
+from datetime import datetime, timedelta
 
 API_URL = 'https://www.aliexpress.com/fn/search-pc/index'
 RESULTS_DIR = "results"
@@ -56,10 +58,10 @@ def initialize_session_data(keyword, log_callback=default_logger):
 
             if cache_age < CACHE_EXPIRATION_SECONDS:
                 cache_valid = True
-                log_callback(f"Using cached session data (Age: {datetime.timedelta(seconds=int(cache_age))}).")
+                log_callback(f"Using cached session data (Age: {timedelta(seconds=int(cache_age))}).")
                 return cached_data['cookies'], cached_data['user_agent']
             else:
-                log_callback(f"Cached session data expired (Age: {datetime.timedelta(seconds=int(cache_age))}).")
+                log_callback(f"Cached session data expired (Age: {timedelta(seconds=int(cache_age))}).")
 
         except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
             log_callback(f"Error reading cache file or cache invalid ({e}). Will fetch fresh session.")
@@ -240,17 +242,14 @@ def scrape_aliexpress_data(keyword, max_pages, cookies, user_agent,
     log_callback(f"\nAPI Scraping finished for product: '{keyword}'. Total raw products collected: {len(all_products_raw)}")
     return all_products_raw
 
-def extract_product_details(raw_products, selected_fields, log_callback=default_logger):
+def extract_product_details(raw_products, selected_fields):
     """
     Extracts and formats desired fields from the raw product data,
     based on the user's selection.
     """
     extracted_data = []
     if not raw_products or not selected_fields:
-        log_callback("No raw products or selected fields for extraction.")
         return extracted_data
-
-    log_callback(f"Extracting selected fields: {selected_fields}")
     for product in raw_products:
         # --- Extract ALL possible fields first ---
         product_id = product.get('productId')
@@ -297,19 +296,115 @@ def extract_product_details(raw_products, selected_fields, log_callback=default_
 
         extracted_data.append(filtered_item)
 
-    log_callback(f"Extracted data for {len(extracted_data)} products with selected fields.")
     return extracted_data
 
-def save_results(keyword, data, selected_fields, log_callback=default_logger):
+def save_results_to_database(keyword, data, track_products=False):
     """
-    Saves the extracted data to JSON and CSV files, named using the keyword.
-    Uses selected_fields for CSV headers.
+    Saves the extracted data to the database, creating/updating products.
+    Only adds price history for tracked products unless track_products=True.
+    """
+    if not data:
+        return 0
+    
+    
+    saved_count = 0
+    updated_count = 0
+    price_updates = 0
+    
+    try:
+        for item in data:
+            product_id = item.get('Product ID')
+            if not product_id:
+                continue
+            
+            # Check if product already exists
+            existing_product = Product.query.filter_by(product_id=str(product_id)).first()
+            
+            if existing_product:
+                # Update existing product
+                existing_product.title = item.get('Title', existing_product.title)
+                existing_product.image_url = item.get('Image URL', existing_product.image_url)
+                existing_product.store_name = item.get('Store Name', existing_product.store_name)
+                existing_product.store_id = item.get('Store ID', existing_product.store_id)
+                existing_product.store_url = item.get('Store URL', existing_product.store_url)
+                existing_product.currency = item.get('Currency', existing_product.currency)
+                existing_product.rating = item.get('Rating', existing_product.rating)
+                existing_product.orders_count = item.get('Orders Count', existing_product.orders_count)
+                existing_product.updated_at = datetime.utcnow()
+                existing_product.is_active = True
+                
+                product = existing_product
+                updated_count += 1
+            else:
+                # Create new product
+                product = Product(
+                    product_id=str(product_id),
+                    title=item.get('Title', ''),
+                    image_url=item.get('Image URL'),
+                    product_url=item.get('Product URL', f"https://www.aliexpress.com/item/{product_id}.html"),
+                    store_name=item.get('Store Name'),
+                    store_id=item.get('Store ID'),
+                    store_url=item.get('Store URL'),
+                    currency=item.get('Currency'),
+                    rating=item.get('Rating'),
+                    orders_count=item.get('Orders Count')
+                )
+                db.session.add(product)
+                saved_count += 1
+            
+            # Only add price history for tracked products or if explicitly requested
+            if track_products or (existing_product and existing_product.is_tracked):
+                sale_price = item.get('Sale Price')
+                original_price = item.get('Original Price')
+                discount = item.get('Discount (%)')
+                
+                # Parse prices if they're strings
+                if isinstance(sale_price, str):
+                    try:
+                        sale_price = float(sale_price.replace('$', '').replace(',', '').replace('€', '').replace('£', ''))
+                    except (ValueError, AttributeError):
+                        sale_price = None
+                
+                if isinstance(original_price, str):
+                    try:
+                        original_price = float(original_price.replace('$', '').replace(',', '').replace('€', '').replace('£', ''))
+                    except (ValueError, AttributeError):
+                        original_price = None
+                
+                if sale_price is not None:
+                    # Flush to get the product ID for new products
+                    db.session.flush()
+                    
+                    price_history = PriceHistory(
+                        product_id=product.id,
+                        sale_price=sale_price,
+                        original_price=original_price,
+                        discount_percentage=discount
+                    )
+                    db.session.add(price_history)
+                    price_updates += 1
+        
+        db.session.commit()
+        return saved_count + updated_count
+        
+    except Exception as e:
+        db.session.rollback()
+        return 0
+
+def save_results(keyword, data, selected_fields, log_callback=default_logger, track_products=False):
+    """
+    Saves the extracted data to both database and files.
     """
     if not data:
         log_callback("No data to save.")
         return None, None
+    
+    # Save to database
+    db_count = save_results_to_database(keyword, data, log_callback, track_products=track_products)
+    
+    # Also save to files for backup
     if not selected_fields:
-        log_callback("No fields selected for saving.")
+        log_callback("No fields selected for file saving.")
         return None, None
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -327,8 +422,7 @@ def save_results(keyword, data, selected_fields, log_callback=default_logger):
             writer.writeheader()
             writer.writerows(data)
         
-        log_callback(f"JSON and CSV results saved to: {json_filename}, {csv_filename}")
-
+        log_callback(f"Files saved to: {json_filename}, {csv_filename}")
         return json_filename, csv_filename
 
     except Exception as e:
@@ -357,56 +451,67 @@ class StreamLogger:
     def stop(self):
         self.active = False
 
-def run_scrape_job(keyword, pages, apply_discount, free_shipping, min_price, max_price, selected_fields, delay=1.0):
+def run_scrape_job(keyword, pages, apply_discount, free_shipping, min_price, max_price, selected_fields, delay=1.0, save_to_db=True, track_products=False):
     """
     Generator function that orchestrates the scraping process with real-time logging.
     """
-    logger = StreamLogger()
-    
-    def scrape_task():
-        try:
-            cookies, user_agent = initialize_session_data(
-                keyword,
-                log_callback=logger.log
-            )
+    try:
+        yield "data: Starting scraping process...\n\n"
+        
+        yield f"data: Initializing session for product: '{keyword}'\n\n"
+        cookies, user_agent = initialize_session_data(keyword)
+        
+        yield f"data: Starting scraping for {pages} pages...\n\n"
+        raw_products = scrape_aliexpress_data(
+            keyword=keyword,
+            max_pages=pages,
+            cookies=cookies,
+            user_agent=user_agent,
+            apply_discount_filter=apply_discount,
+            apply_free_shipping_filter=free_shipping,
+            min_price=min_price,
+            max_price=max_price,
+            delay=delay
+        )
+        
+        yield "data: Extracting product details...\n\n"
+        extracted_data = extract_product_details(raw_products, selected_fields)
+        
+        yield "data: Saving results...\n\n"
+        if save_to_db:
+            db_count = save_results_to_database(keyword, extracted_data, track_products=track_products)
+            yield f"data: Database saved: {db_count} products\n\n"
             
-            logger.log(f"Starting scraping for {pages} pages...")
-            raw_products = scrape_aliexpress_data(
-                keyword=keyword,
-                max_pages=pages,
-                cookies=cookies,
-                user_agent=user_agent,
-                apply_discount_filter=apply_discount,
-                apply_free_shipping_filter=free_shipping,
-                min_price=min_price,
-                max_price=max_price,
-                delay=delay,
-                log_callback=logger.log
-            )
+            # Also save backup files
+            os.makedirs(RESULTS_DIR, exist_ok=True)
+            keyword_safe_name = "".join(c if c.isalnum() else "_" for c in keyword)
+            json_filename = os.path.join(RESULTS_DIR, f'aliexpress_{keyword_safe_name}_extracted.json')
             
-            logger.log("Extracting product details...")
-            extracted_data = extract_product_details(
-                raw_products,
-                selected_fields,
-                log_callback=logger.log
-            )
+            try:
+                with open(json_filename, 'w', encoding='utf-8') as f:
+                    json.dump(extracted_data, f, ensure_ascii=False, indent=4)
+                yield f"data: Backup file saved to: {json_filename}\n\n"
+            except Exception as e:
+                yield f"data: Error saving backup file: {e}\n\n"
+        else:
+            # Legacy file-only saving
+            os.makedirs(RESULTS_DIR, exist_ok=True)
+            keyword_safe_name = "".join(c if c.isalnum() else "_" for c in keyword)
+            json_filename = os.path.join(RESULTS_DIR, f'aliexpress_{keyword_safe_name}_extracted.json')
             
-            logger.log("Saving results...")
-            json_file, csv_file = save_results(
-                keyword,
-                extracted_data,
-                selected_fields,
-                log_callback=logger.log
-            )
-            
-        except Exception as e:
-            logger.log(f"ERROR: {str(e)}")
-        finally:
-            logger.stop()
-    
-    threading.Thread(target=scrape_task, daemon=True).start()
-    
-    yield from logger.stream_messages()
+            try:
+                with open(json_filename, 'w', encoding='utf-8') as f:
+                    json.dump(extracted_data, f, ensure_ascii=False, indent=4)
+                yield f"data: JSON file saved to: {json_filename}\n\n"
+            except Exception as e:
+                yield f"data: Error saving results to file: {e}\n\n"
+        
+        yield "data: Scraping completed successfully!\n\n"
+        
+    except Exception as e:
+        yield f"data: ERROR: {str(e)}\n\n"
+    finally:
+        yield "data: PROCESS_COMPLETE\n\n"
 
 
 if __name__ == "__main__":
