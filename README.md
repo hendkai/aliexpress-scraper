@@ -1,93 +1,101 @@
 # AliExpress Product Scraper
 
-A powerful and user-friendly web interface for scraping product data from AliExpress using their unofficial API.
+Ein leistungsstarkes und benutzerfreundliches Web-Interface zum Scrapen von Produktdaten von AliExpress über deren inoffizielle API.
 
 ![MIT License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.6+-blue.svg)
 
 ## Screenshots
 
-### Search Interface
+### Such-Interface
 ![Search Interface](screenshots/Capture1.PNG)
 
-### Results and Field Selection
+### Ergebnisse und Feldauswahl
 ![Field Selection and Results](screenshots/Capture.PNG)
 
 ## Features
 
-- 🌐 **Web Interface**: Clean and intuitive UI for easy interaction
-- 🚀 **API-Based Scraping**: Fast and efficient data collection using AliExpress's unofficial API
-- 🔒 **Smart Session Management**: Uses browser automation only for initial cookie collection
-- 🛡️ **Anti-Block Protection**: 
-  - Configurable delay between requests (0.2-10 seconds)
-  - Sequential request processing to avoid overwhelming the server
-  - Session caching to minimize browser automation
-- 📊 **Flexible Data Export**:
-  - JSON format for full data preservation
-  - CSV format for easy spreadsheet import
-- 🎯 **Customizable Fields**: Select exactly which product details to extract
-- 🔍 **Advanced Filtering**:
-  - Price range filtering
-  - Discount deals filter
-  - Free shipping filter
-- 📝 **Real-time Progress**: Live logging of the scraping process
+- 🌐 **Web-Oberfläche**: Intuitive UI für einfache Bedienung
+- 🚀 **API-basiertes Scraping**: Schnelle und effiziente Datenerfassung über die AliExpress-API
+- 🔒 **Intelligentes Session-Management**: Browser-Automatisierung nur für initiale Cookie-Erfassung
+- 🛡️ **Anti-Block-Schutz**: 
+  - Konfigurierbare Verzögerung zwischen Anfragen (0,2–10 Sekunden)
+  - Serielle Verarbeitung zur Vermeidung von Blockaden
+  - Session-Caching zur Minimierung von Browser-Automatisierung
+- 📊 **Flexible Datenexporte**:
+  - JSON-Format für vollständige Datensicherung
+  - CSV-Format für Tabellenkalkulationen
+- 🎯 **Feldauswahl**: Exakte Auswahl der zu extrahierenden Produktdetails
+- 🔍 **Erweiterte Filter**:
+  - Preisbereich
+  - Rabatt-Deals
+  - Kostenloser Versand
+- 📝 **Echtzeit-Logging**: Live-Log der Scraping-Prozesse
+- ⏰ **Automatisches Scraping**: Zeitgesteuerte Aktualisierung und Keyword-basierte Überwachung
 
-## How It Works
+## Projektstruktur
 
-1. **Smart Session Handling**:
-   - First visit uses a headless browser to collect necessary cookies
-   - Subsequent requests use cached session data (30-minute validity)
-   - Minimizes the need for browser automation
-
-2. **Efficient API Scraping**:
-   - Uses AliExpress's internal API for data collection
-   - Faster and more reliable than HTML scraping
-   - Reduces the chance of being blocked
-
-3. **Data Processing**:
-   - Extracts clean, structured data
-   - Handles currency formatting
-   - Processes URLs and image links
-   - Manages pagination automatically
+- `app.py` – Flask Web-App mit Datenbankintegration
+- `scraper.py` – Zentrale Scraping-Logik und AliExpress-API
+- `models.py` – SQLAlchemy Datenbankmodelle
+- `scheduler.py` – Automatisches, zeitgesteuertes Scraping
+- `templates/` – Jinja2-Templates für die Weboberfläche
+- `results/` – Exportierte CSV- und JSON-Dateien
+- `instance/aliexpress_scraper.db` – SQLite-Datenbankdatei
+- `session_cache.json` – Zwischengespeicherte Sessiondaten
 
 ## Installation
 
-1. Clone the repository:
+1. Repository klonen:
 ```bash
-git clone https://github.com/ImranDevPython/aliexpress-scraper.git
+git clone https://github.com/hendkai/aliexpress-scraper.git
 cd aliexpress-scraper
 ```
 
-2. Install required packages:
+2. Abhängigkeiten installieren:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+## Nutzung
 
-1. Start the web interface:
+1. Web-Oberfläche starten:
 ```bash
 python app.py
 ```
 
-2. Open your browser and navigate to:
+2. Im Browser öffnen:
 ```
 http://localhost:5000
 ```
 
-3. In the web interface:
-   - Enter your search keyword
-   - Select number of pages to scrape (1-60)
-   - Choose which fields to include
-   - Set optional filters (price range, discounts, shipping)
-   - Adjust request delay (recommended: 1 second)
-   - Start scraping and monitor progress
+3. In der Weboberfläche:
+   - Suchbegriff eingeben
+   - Anzahl der zu scrapenden Seiten wählen (1–60)
+   - Felder auswählen
+   - Optionale Filter setzen (Preis, Rabatt, Versand)
+   - Anfrageverzögerung einstellen (empfohlen: 1 Sekunde)
+   - Scraping starten und Fortschritt beobachten
 
-4. Results will be saved in the `results` folder as:
+4. Ergebnisse werden im Ordner `results/` gespeichert als:
    - `aliexpress_[keyword]_extracted.json`
    - `aliexpress_[keyword]_extracted.csv`
 
-## Available Fields
+## Automatisches Scraping
+
+Das System unterstützt zeitgesteuertes, automatisches Scraping über den eingebauten Scheduler (`scheduler.py`).
+- Keywords können mit Intervall gepflegt werden (z.B. alle 6h).
+- Preisverläufe und neue Produkte werden automatisch aktualisiert.
+- Verwaltung und Statusanzeige über die Weboberfläche unter "Settings".
+
+## Datenbankstruktur (Kernmodelle)
+
+- **Product**: Produktdaten, Varianten, Shop, Preis, Status, Tracking
+- **PriceHistory**: Historische Preisverläufe
+- **SearchKeyword**: Überwachte Suchbegriffe und deren Intervalle
+- **ScrapingLog**: Protokollierung aller Scraping-Aktivitäten
+
+## Verfügbare Felder
 
 - Product ID
 - Title
@@ -105,29 +113,20 @@ http://localhost:5000
 
 ## Best Practices
 
-1. **Request Delay**:
-   - Default: 1 second between requests
-   - Lower values (0.2-0.5s) may work but risk temporary IP blocks
-   - Adjust based on your needs and risk tolerance
+1. **Anfrageverzögerung**:
+   - Standard: 1 Sekunde zwischen Anfragen
+   - Niedrigere Werte (0,2–0,5s) erhöhen das Blockier-Risiko
+2. **Seitenanzahl**:
+   - Maximal: 60 Seiten pro Suche
+   - Mit Filtern gezielter suchen
+3. **Session-Management**:
+   - Sessiondaten werden 30 Minuten zwischengespeichert
+   - Bei Problemen Cookies löschen und Browser neu starten
 
-2. **Page Count**:
-   - Maximum: 60 pages per search
-   - Recommended: Start with fewer pages to test
-   - Use filters to get more relevant results
+## Lizenz
 
-3. **Session Management**:
-   - Session data is cached for 30 minutes
-   - Clear browser cookies if you encounter issues
-   - Let the automated browser handle cookie collection
+Dieses Projekt steht unter der MIT-Lizenz – siehe [LICENSE](LICENSE).
 
-## Contributing
+## Hinweis
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Disclaimer
-
-This tool is for educational purposes only. Use responsibly and in accordance with AliExpress's terms of service. 
+Dieses Tool dient ausschließlich zu Bildungszwecken. Nutzung auf eigene Verantwortung und unter Beachtung der AliExpress-Nutzungsbedingungen. 
