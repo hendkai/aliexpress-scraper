@@ -1,240 +1,300 @@
 # AliExpress Product Scraper
 
-Ein leistungsstarkes und benutzerfreundliches Web-Interface zum Scrapen von Produktdaten von AliExpress mit fortschrittlichem Produktvarianten-System und automatischer Preisüberwachung.
+A powerful and user-friendly web interface for scraping product data from AliExpress with advanced product variant system and automated price monitoring.
 
 ![MIT License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.6+-blue.svg)
 
 ## Screenshots
 
-### Such-Interface
+### Search Interface
 ![Search Interface](screenshots/Capture1.PNG)
 
-### Ergebnisse und Feldauswahl
+### Results and Field Selection
 ![Field Selection and Results](screenshots/Capture.PNG)
 
-## 🌟 Hauptfeatures
+## 🌟 Key Features
 
-### 🛍️ **Produktvarianten-System**
-- **Automatische Variant-Erkennung**: Multi-Level-Fallback (API → Interactive → HTML-Analyse)
-- **Intelligente Gruppierung**: Varianten werden automatisch nach Produktgruppen organisiert
-- **Echte Produktbilder**: Authentische AliExpress-Bilder für jede Variante
-- **Automatisches Tracking**: Alle gefundenen Varianten werden automatisch überwacht
+### 🛍️ **Product Variant System**
+- **Automatic Variant Detection**: Multi-level fallback (API → Interactive → HTML Analysis)
+- **Intelligent Grouping**: Variants are automatically organized by product groups
+- **Real Product Images**: Authentic AliExpress images for each variant
+- **Automatic Tracking**: All discovered variants are automatically monitored
 
-### 📊 **Produktüberwachung & Tracking**
-- **Preishistorie-Charts**: Visuelle Darstellung von Preisverläufen mit Chart.js
-- **Selektives Tracking**: Produkte einzeln oder automatisch für Überwachung auswählen
-- **Echtzeit-Updates**: Automatische Aktualisierung von Preisen und neuen Varianten
-- **Detaillierte Produktseiten**: Umfassende Ansicht mit Varianten, Preishistorie und Store-Infos
+### 📊 **Product Monitoring & Tracking**
+- **Price History Charts**: Visual representation of price trends with Chart.js
+- **Selective Tracking**: Choose products individually or automatically for monitoring
+- **Real-time Updates**: Automatic price updates and new variant discovery
+- **Detailed Product Pages**: Comprehensive view with variants, price history, and store info
 
-### 🌐 **Erweiterte Navigation**
-- **Browse-Galerie**: Durchsuchen aller Produkte mit Filtern und Sortierung
-- **Such-System**: Volltext-Suche über alle Produkttitel
-- **Settings-Bereich**: Datenbankmanagement, Statistiken und Export-Funktionen
-- **Responsive Design**: Optimiert für Desktop und mobile Geräte
+### 🌐 **Advanced Navigation**
+- **Browse Gallery**: Browse all products with filters and sorting options
+- **Search System**: Full-text search across all product titles
+- **Settings Area**: Database management, statistics, and export functions
+- **Responsive Design**: Optimized for desktop and mobile devices
 
-### 🚀 **Scraping-Engine**
-- **API-basiertes Scraping**: Schnelle und effiziente Datenerfassung über die AliExpress-API
-- **Intelligentes Session-Management**: Browser-Automatisierung nur für initiale Cookie-Erfassung
-- **Anti-Block-Schutz**: 
-  - Konfigurierbare Verzögerung zwischen Anfragen (0,2–10 Sekunden)
-  - Serielle Verarbeitung zur Vermeidung von Blockaden
-  - Session-Caching zur Minimierung von Browser-Automatisierung
-- **Echtzeit-Streaming**: Live-Updates während des Scraping-Prozesses
+### 🚀 **Scraping Engine**
+- **API-based Scraping**: Fast and efficient data collection via AliExpress API
+- **Intelligent Session Management**: Browser automation only for initial cookie capture
+- **Anti-blocking Protection**: 
+  - Configurable delay between requests (0.2–10 seconds)
+  - Sequential processing to avoid server overload
+  - Session caching to minimize browser automation overhead
+- **Real-time Streaming**: Live updates during scraping process
 
-### 📈 **Automatisierung**
-- **Zeitgesteuertes Scraping**: Keyword-basierte automatische Produktaktualisierung
-- **Scheduler-System**: Konfigurierbare Intervalle für verschiedene Suchbegriffe
-- **Background-Processing**: Automatische Preisüberwachung ohne Benutzerinteraktion
-- **Umfassendes Logging**: Detaillierte Protokollierung aller Scraping-Aktivitäten
+### 📈 **Automation**
+- **Scheduled Scraping**: Keyword-based automatic product updates
+- **Scheduler System**: Configurable intervals for different search terms
+- **Background Processing**: Automatic price monitoring without user interaction
+- **Comprehensive Logging**: Detailed logging of all scraping activities
 
-## 🏗️ Projektstruktur
+## 🏗️ Project Structure
 
 ```
 aliexpress-scraper/
-├── app.py                      # Flask Web-App mit erweitertem Routing
-├── scraper.py                  # Zentrale Scraping-Logik mit Variant-System
-├── models.py                   # SQLAlchemy Datenbankmodelle
-├── scheduler.py                # Automatisches, zeitgesteuertes Scraping
-├── templates/                  # Jinja2-Templates für die Weboberfläche
-│   ├── index.html             # Haupt-Scraping-Interface
-│   ├── browse.html            # Produkt-Galerie mit Filtern
-│   ├── product_detail.html    # Detailansicht mit Varianten & Charts
-│   ├── search.html            # Suchfunktion
-│   ├── settings.html          # Admin-Bereich
-│   └── ...                    # Weitere Templates
-├── results/                    # Exportierte CSV- und JSON-Dateien
-├── aliexpress_scraper.db      # SQLite-Datenbankdatei
-└── session_cache.json         # Zwischengespeicherte Sessiondaten
+├── app.py                      # Flask web app with extended routing
+├── scraper.py                  # Core scraping logic with variant system
+├── models.py                   # SQLAlchemy database models
+├── scheduler.py                # Automatic, scheduled scraping
+├── templates/                  # Jinja2 templates for web interface
+│   ├── index.html             # Main scraping interface
+│   ├── browse.html            # Product gallery with filters
+│   ├── product_detail.html    # Detail view with variants & charts
+│   ├── search.html            # Search functionality
+│   ├── settings.html          # Admin area
+│   └── ...                    # Additional templates
+├── results/                    # Exported CSV and JSON files
+├── aliexpress_scraper.db      # SQLite database file
+└── session_cache.json         # Cached session data
 ```
 
 ## 📦 Installation
 
-1. Repository klonen:
+1. Clone the repository:
 ```bash
 git clone https://github.com/ImranDevPython/aliexpress-scraper.git
 cd aliexpress-scraper
 ```
 
-2. Abhängigkeiten installieren:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-## 🚀 Nutzung
+## 🚀 Usage
 
-### 1. Anwendung starten
+### 1. Start the Application
 ```bash
 python app.py
 ```
 
-### 2. Web-Interface öffnen
+### 2. Open Web Interface
 ```
 http://localhost:5000
 ```
 
-### 3. Navigation und Features
+### 3. Navigation and Features
 
-#### **Hauptseite (Scraping)**
-- Suchbegriff eingeben (z.B. "3D Filament", "Bluetooth Kopfhörer")
-- Anzahl der zu scrapenden Seiten wählen (1–60)
-- Felder auswählen und Filter setzen
-- Anfrageverzögerung einstellen (empfohlen: 1 Sekunde)
-- Scraping starten und Echtzeit-Fortschritt beobachten
+#### **Main Page (Scraping)**
+- Enter search term (e.g., "3D Filament", "Bluetooth Headphones")
+- Choose number of pages to scrape (1–60)
+- Select fields and set filters
+- Configure request delay (recommended: 1 second)
+- Start scraping and observe real-time progress
 
-#### **Browse-Galerie** (`/browse`)
-- Alle Produkte in einer übersichtlichen Galerie durchsuchen
-- Filter nach Kategorie, Store, oder nur getrackte Produkte
-- Sortierung nach Preis, Bewertung, Bestellungen oder Aktualität
-- Pagination für große Produktmengen
+#### **Browse Gallery** (`/browse`)
+- Browse all products in a clear gallery view
+- Filter by category, store, or tracked products only
+- Sort by price, rating, orders, or recency
+- Pagination for large product collections
 
-#### **Produktdetails** (`/product/<id>`)
-- Vollständige Produktinformationen mit Preishistorie-Chart
-- **Varianten-Galerie**: Alle verfügbaren Produktvarianten mit echten Bildern
-- **Update-Button**: Automatisches Finden und Tracken neuer Varianten
-- **Tracking-Control**: Produkt für Preisüberwachung aktivieren/deaktivieren
-- Direktlink zur originalen AliExpress-Seite
+#### **Product Details** (`/product/<id>`)
+- Complete product information with price history chart
+- **Variant Gallery**: All available product variants with real images
+- **Update Button**: Automatically find and track new variants
+- **Tracking Control**: Enable/disable product for price monitoring
+- Direct link to original AliExpress page
 
-#### **Suche** (`/search`)
-- Volltext-Suche über alle gespeicherten Produkte
-- Schnelle Filterung nach Produkttiteln
+#### **Search** (`/search`)
+- Full-text search across all stored products
+- Quick filtering by product titles
 
 #### **Settings** (`/settings`)
-- Datenbankstatistiken und -verwaltung
-- Datenexport für getrackte Produkte
-- Bereinigung alter Daten
-- System-Übersicht
+- Database statistics and management
+- Data export for tracked products
+- Cleanup of old data
+- System overview
 
-### 4. Variant-System nutzen
+### 4. Using the Variant System
 
-Das Herzstück der Anwendung ist das intelligente Produktvarianten-System:
+The heart of the application is the intelligent product variant system:
 
-1. **Varianten automatisch finden**: Auf einer Produktdetailseite den "Update"-Button klicken
-2. **Multi-Level-Erkennung**: Das System versucht automatisch:
-   - API-basierte Variant-Extraktion
-   - Interactive Browser-Navigation
-   - Intelligente HTML-Analyse mit produktspezifischen Regeln
-3. **Automatisches Tracking**: Alle gefundenen Varianten werden automatisch überwacht
-4. **Echte Bilder**: Authentische AliExpress-Produktbilder für jede Variante
+1. **Find Variants Automatically**: Click the "Update" button on a product detail page
+2. **Multi-Level Detection**: The system automatically attempts:
+   - API-based variant extraction
+   - Interactive browser navigation
+   - Intelligent HTML analysis with product-specific rules
+3. **Automatic Tracking**: All discovered variants are automatically monitored
+4. **Real Images**: Authentic AliExpress product images for each variant
 
-## 🗄️ Datenbankstruktur
+## 🗄️ Database Structure
 
-### Kernmodelle
-- **Product**: Produktdaten, Varianten, Shop, Preis, Status, Tracking
-  - `product_id`: AliExpress Produkt-ID (gruppiert Varianten)
-  - `sku_id`: Eindeutige SKU für spezifische Varianten
-  - `variant_title`: Variantenbeschreibung (z.B. "1KG Red", "Size L")
-  - `is_tracked`: Tracking-Status für Preisüberwachung
-- **PriceHistory**: Historische Preisverläufe mit Zeitstempel
-- **SearchKeyword**: Überwachte Suchbegriffe und deren Intervalle
-- **ScrapingLog**: Protokollierung aller Scraping-Aktivitäten
+### Core Models
+- **Product**: Product data, variants, shop, price, status, tracking
+  - `product_id`: AliExpress Product ID (groups variants)
+  - `sku_id`: Unique SKU for specific variants
+  - `variant_title`: Variant description (e.g., "1KG Red", "Size L")
+  - `is_tracked`: Tracking status for price monitoring
+- **PriceHistory**: Historical price trends with timestamps
+- **SearchKeyword**: Monitored search terms and their intervals
+- **ScrapingLog**: Logging of all scraping activities
 
-### Variant-Gruppierung
-Produkte werden über das `product_id`-Feld gruppiert. Alle Varianten eines Produkts teilen sich die gleiche `product_id`, haben aber unterschiedliche `sku_id`s.
+### Variant Grouping
+Products are grouped via the `product_id` field. All variants of a product share the same `product_id` but have different `sku_id`s.
 
-## 📋 Verfügbare Felder
+## 📋 Available Fields
 
-- **Product ID** - AliExpress Produkt-Identifikator
-- **SKU ID** - Eindeutige Varianten-Identifikator
-- **Title** - Produkttitel
-- **Variant Title** - Variantenbeschreibung
-- **Sale Price** - Verkaufspreis
-- **Original Price** - Ursprungspreis
-- **Discount (%)** - Rabatt-Prozentsatz
-- **Currency** - Währung
-- **Rating** - Produktbewertung
-- **Orders Count** - Anzahl Bestellungen
-- **Store Name** - Shop-Name
-- **Store ID** - Shop-Identifikator
-- **Store URL** - Shop-Link
-- **Product URL** - Produktlink
-- **Image URL** - Produktbild
+- **Product ID** - AliExpress product identifier
+- **SKU ID** - Unique variant identifier
+- **Title** - Product title
+- **Variant Title** - Variant description
+- **Sale Price** - Current selling price
+- **Original Price** - Original price
+- **Discount (%)** - Discount percentage
+- **Currency** - Currency
+- **Rating** - Product rating
+- **Orders Count** - Number of orders
+- **Store Name** - Shop name
+- **Store ID** - Shop identifier
+- **Store URL** - Shop link
+- **Product URL** - Product link
+- **Image URL** - Product image
 
-## ⚙️ Automatisches Scraping & Scheduling
+## ⚙️ Automatic Scraping & Scheduling
 
-### Keyword-Management
-1. **Keywords hinzufügen**: Über `/keywords` Suchbegriffe mit Intervallen definieren
-2. **Automatische Überwachung**: Scheduler führt regelmäßige Suchen durch
-3. **Preishistorie**: Automatische Aktualisierung getrackerter Produkte
-4. **Logs einsehen**: Über `/logs` alle Scraping-Aktivitäten überwachen
+### Keyword Management
+1. **Add Keywords**: Define search terms with intervals via `/keywords`
+2. **Automatic Monitoring**: Scheduler performs regular searches
+3. **Price History**: Automatic updates for tracked products
+4. **View Logs**: Monitor all scraping activities via `/logs`
 
-### Empfohlene Intervalle
-- **Häufige Updates**: 1-6 Stunden für wichtige Produkte
-- **Regelmäßige Checks**: 12-24 Stunden für Standard-Überwachung
-- **Wöchentliche Scans**: 168 Stunden für umfassende Marktanalyse
+### Recommended Intervals
+- **Frequent Updates**: 1-6 hours for important products
+- **Regular Checks**: 12-24 hours for standard monitoring
+- **Weekly Scans**: 168 hours for comprehensive market analysis
 
 ## 🛡️ Best Practices
 
-### 1. **Anfrageverzögerung**
-- **Standard**: 1 Sekunde zwischen Anfragen
-- **Automatisches Scraping**: 2 Sekunden (konservativer)
-- **Niedrigere Werte** (0,2–0,5s) erhöhen das Blockier-Risiko
+### 1. **Request Delay**
+- **Standard**: 1 second between requests
+- **Automatic Scraping**: 2 seconds (more conservative)
+- **Lower Values** (0.2–0.5s) increase blocking risk
 
-### 2. **Seitenanzahl**
-- **Manuell**: Bis zu 60 Seiten pro Suche
-- **Automatisch**: Maximal 3 Seiten zur Serverschonung
-- **Mit Filtern** gezielter suchen für bessere Ergebnisse
+### 2. **Page Count**
+- **Manual**: Up to 60 pages per search
+- **Automatic**: Maximum 3 pages to preserve server resources
+- **Use Filters** for more targeted searches and better results
 
-### 3. **Session-Management**
-- **Cache-Dauer**: 30 Minuten für optimale Performance
-- **Bei Problemen**: `session_cache.json` löschen und Browser neu starten
-- **Stealth-Modus**: Automatische User-Agent-Rotation
+### 3. **Session Management**
+- **Cache Duration**: 30 minutes for optimal performance
+- **If Issues**: Delete `session_cache.json` and restart browser
+- **Stealth Mode**: Automatic user-agent rotation
 
-### 4. **Variant-Optimierung**
-- **Update-Frequenz**: Nicht öfter als alle 24 Stunden pro Produkt
-- **Batch-Processing**: Mehrere Produkte gleichzeitig aktualisieren
-- **Tracking-Strategie**: Nur relevante Varianten dauerhaft tracken
+### 4. **Variant Optimization**
+- **Update Frequency**: No more than once every 24 hours per product
+- **Batch Processing**: Update multiple products simultaneously
+- **Tracking Strategy**: Only track relevant variants permanently
 
-## 🔧 Erweiterte Features
+## 🔧 Advanced Features
 
-### API-Endpunkte
-- `GET /api/products` - Produktliste mit Pagination
-- `POST /api/product/<id>/update` - Produkt und Varianten aktualisieren
-- `POST /api/product/<id>/track` - Tracking aktivieren/deaktivieren
-- `GET /api/product/<id>/price_history` - Preishistorie abrufen
+### API Endpoints
+- `GET /api/products` - Product list with pagination
+- `POST /api/product/<id>/update` - Update product and variants
+- `POST /api/product/<id>/track` - Enable/disable tracking
+- `GET /api/product/<id>/price_history` - Retrieve price history
 
-### Datenexport
-- **JSON**: Vollständige Datensicherung mit Metadaten
-- **CSV**: Tabellenkalkulation-kompatibel
-- **Automatisch**: Backup nach jedem Scraping-Vorgang
+### Data Export
+- **JSON**: Complete data backup with metadata
+- **CSV**: Spreadsheet-compatible format
+- **Automatic**: Backup after each scraping session
 
 ### Debugging
-- `GET /debug/product/<id>` - Variant-Debug-Informationen
-- Umfangreiche Console-Logs für Entwicklung
-- Test-Skripte für Variant-System-Validierung
+- `GET /debug/product/<id>` - Variant debug information
+- Comprehensive console logs for development
+- Test scripts for variant system validation
 
-## 📜 Lizenz
+## 🌍 Multi-Level Variant Detection
 
-Dieses Projekt steht unter der MIT-Lizenz – siehe [LICENSE](LICENSE).
+The system employs a sophisticated fallback strategy for maximum variant discovery:
 
-## ⚠️ Hinweis
+### 1. **API Method** (Primary)
+- Direct AliExpress API calls for official variant data
+- Fastest and most reliable method
+- Includes complete SKU information and pricing
 
-Dieses Tool dient ausschließlich zu Bildungszwecken. Nutzung auf eigene Verantwortung und unter Beachtung der AliExpress-Nutzungsbedingungen. Das Scraping sollte respektvoll und mit angemessenen Verzögerungen erfolgen.
+### 2. **Interactive Browser Method** (Secondary)
+- Automated browser navigation through variant options
+- Simulates user interaction with color/size selectors
+- Captures real-time price changes per variant
 
-## 🤝 Beitragen
+### 3. **HTML Analysis Method** (Fallback)
+- Intelligent product-specific variant generation
+- Uses product characteristics and known patterns
+- Includes real AliExpress image URLs for known products
 
-Beiträge sind willkommen! Bitte erstellen Sie Issues für Bugs oder Feature-Requests, und Pull Requests für Code-Verbesserungen.
+### 4. **Smart Demo Mode**
+- For specific products (e.g., ANYCUBIC filaments)
+- Pre-configured variants with authentic images
+- Based on actual product analysis and user feedback
+
+## 📈 Performance & Scalability
+
+### Database Optimization
+- Indexed product and variant relationships
+- Efficient price history queries
+- Automatic cleanup of old data
+
+### Memory Management
+- Session caching with TTL
+- Streaming responses for large datasets
+- Pagination for UI performance
+
+### Monitoring
+- Real-time scraping progress
+- Error tracking and recovery
+- Performance metrics and statistics
+
+## 🛠️ Development & Testing
+
+### Test Scripts
+- `test_variants.py` - Variant system validation
+- `test_browse_and_variants.py` - Browse functionality testing
+- `debug_variant_scraping.py` - Debug variant detection
+
+### Development Tools
+- Debug routes for troubleshooting
+- Comprehensive error logging
+- Development mode with detailed output
+
+## 📜 License
+
+This project is licensed under the MIT License – see [LICENSE](LICENSE).
+
+## ⚠️ Disclaimer
+
+This tool is for educational purposes only. Use at your own responsibility and in compliance with AliExpress terms of service. Scraping should be done respectfully with appropriate delays.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please create issues for bugs or feature requests, and pull requests for code improvements.
+
+## 📞 Support
+
+For questions or support:
+- Create an issue on GitHub
+- Check the debug endpoints for troubleshooting
+- Review the comprehensive logging for error details
 
 ---
 
-**Entwickelt mit ❤️ für die E-Commerce-Datenanalyse**
+**Developed with ❤️ for E-Commerce Data Analysis**
