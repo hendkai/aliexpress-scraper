@@ -1,0 +1,41 @@
+<!-- Standard Navigation for AliExpress Scraper -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+            <i class="fas fa-shopping-cart"></i> AliExpress Scraper
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link {{ 'active' if request.endpoint == 'index' }}" href="{{ url_for('index') }}">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'search_products' }}" href="{{ url_for('search_products') }}">
+                    <i class="fas fa-search"></i> Search
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'browse_products' }}" href="{{ url_for('browse_products') }}">
+                    <i class="fas fa-th-large"></i> Browse
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'tracked_products' }}" href="{{ url_for('tracked_products') }}">
+                    <i class="fas fa-star"></i> Tracked Products
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'scrape_results' }}" href="{{ url_for('scrape_results') }}">
+                    <i class="fas fa-plus-circle"></i> Add Products
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'manage_keywords' }}" href="{{ url_for('manage_keywords') }}">
+                    <i class="fas fa-tags"></i> Keywords
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'scraping_logs' }}" href="{{ url_for('scraping_logs') }}">
+                    <i class="fas fa-list-alt"></i> Logs
+                </a>
+                <a class="nav-link {{ 'active' if request.endpoint == 'settings' }}" href="{{ url_for('settings') }}">
+                    <i class="fas fa-cog"></i> Settings
+                </a>
+            </div>
+        </div>
+    </div>
+</nav>

@@ -8,19 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">AliExpress Scraper</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="{{ url_for('index') }}">Home</a>
-                <a class="nav-link" href="{{ url_for('search_products') }}">Search</a>
-                <a class="nav-link" href="{{ url_for('tracked_products') }}">Tracked Products</a>
-                <a class="nav-link active" href="{{ url_for('scrape_results') }}">Add Products</a>
-                <a class="nav-link" href="{{ url_for('manage_keywords') }}">Keywords</a>
-                <a class="nav-link" href="{{ url_for('scraping_logs') }}">Logs</a>
-            </div>
-        </div>
-    </nav>
+    {% include 'base_navbar.html' %}
 
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -29,6 +17,9 @@
                 <p class="text-muted">Choose which products you want to monitor for price changes</p>
             </div>
             <div>
+                <button class="btn btn-outline-primary me-2" onclick="updateAllProducts()" id="updateAllBtn">
+                    <i class="fas fa-sync-alt"></i> Update All Products
+                </button>
                 <a href="{{ url_for('tracked_products') }}" class="btn btn-success">
                     <i class="fas fa-star"></i> View Tracked Products
                 </a>
@@ -39,24 +30,64 @@
         <div class="alert alert-info">
             <i class="fas fa-info-circle"></i> 
             Click the <i class="fas fa-star text-warning"></i> icon to start tracking a product's price history.
+            <br><small><strong>Variants:</strong> Products with multiple variants (e.g., N100/N150) are grouped together. Select the specific variant you want to track.</small>
         </div>
 
         <div class="row">
+            {% set current_spu = None %}
             {% for product in products.items %}
+            
+            <!-- Check if this is the start of a new variant group -->
+            {% if product.spu_id and product.spu_id != current_spu %}
+                {% set current_spu = product.spu_id %}
+                {% set variants = [] %}
+                {% for p in products.items %}
+                    {% if p.spu_id == current_spu %}
+                        {% set _ = variants.append(p) %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if variants|length > 1 %}
+                <div class="col-12 mb-3">
+                    <div class="alert alert-light border">
+                        <h6 class="mb-2"><i class="fas fa-layer-group"></i> Product Variants ({{ variants|length }} options)</h6>
+                        <p class="mb-0 small text-muted">{{ product.get_base_title() }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            {% endif %}
+            
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card h-100">
+                <div class="card h-100 {% if product.spu_id and variants|length > 1 %}border-warning{% endif %}">
                     <div class="position-relative">
                         {% if product.image_url %}
                         <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.title }}" style="height: 200px; object-fit: cover;">
                         {% endif %}
                         <div class="position-absolute top-0 end-0 p-2">
-                            <button class="btn btn-sm btn-outline-warning" onclick="toggleTracking({{ product.id }}, this)" title="Start tracking this product">
-                                <i class="far fa-star"></i>
-                            </button>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-warning" onclick="toggleTracking({{ product.id }}, this)" title="Start tracking this specific variant">
+                                    <i class="far fa-star"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="updateProduct({{ product.id }}, this)" title="Update this product and find new variants">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
                         </div>
+                        {% if product.variant_title %}
+                        <div class="position-absolute top-0 start-0 p-2">
+                            <span class="badge bg-primary">{{ product.variant_title }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="card-body d-flex flex-column">
-                        <h6 class="card-title">{{ product.title[:80] }}{% if product.title|length > 80 %}...{% endif %}</h6>
+                        <h6 class="card-title">
+                            {% if product.variant_title %}
+                                {{ product.get_base_title()[:60] }}{% if product.get_base_title()|length > 60 %}...{% endif %}
+                                <br><small class="text-primary fw-bold">Variant: {{ product.variant_title }}</small>
+                            {% else %}
+                                {{ product.title[:80] }}{% if product.title|length > 80 %}...{% endif %}
+                            {% endif %}
+                        </h6>
                         
                         <div class="mt-auto">
                             {% set current_price = product.get_current_price() %}
@@ -75,12 +106,20 @@
                             <div class="small text-muted mb-2">
                                 <i class="fas fa-clock"></i> 
                                 Added: {{ product.created_at.strftime('%Y-%m-%d') }}
+                                {% if product.sku_id %}
+                                <br><i class="fas fa-barcode"></i> SKU: {{ product.sku_id[-8:] }}
+                                {% endif %}
                             </div>
                             
                             <div class="d-flex gap-2">
                                 <a href="{{ url_for('product_detail', product_id=product.id) }}" class="btn btn-primary btn-sm flex-grow-1">
                                     <i class="fas fa-info-circle"></i> View Details
                                 </a>
+                                {% if product.get_variants()|length > 0 %}
+                                <a href="{{ url_for('product_variants', product_id=product.id) }}" class="btn btn-outline-info btn-sm" title="View all variants">
+                                    <i class="fas fa-layer-group"></i>
+                                </a>
+                                {% endif %}
                                 <a href="{{ product.product_url }}" target="_blank" class="btn btn-outline-secondary btn-sm">
                                     <i class="fas fa-external-link-alt"></i>
                                 </a>
@@ -148,6 +187,118 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function updateProduct(productId, button) {
+            // Disable button and show loading state
+            const originalHtml = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            button.disabled = true;
+            
+            fetch(`/api/product/${productId}/update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-check"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                    
+                    // If new variants were found, suggest reloading
+                    if (data.new_variants && data.new_variants > 0) {
+                        setTimeout(() => {
+                            if (confirm(`Found ${data.new_variants} new variants! Reload page to see them?`)) {
+                                location.reload();
+                            }
+                        }, 2000);
+                    }
+                } else {
+                    // Show error message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-danger alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-exclamation-triangle"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                }
+                
+                // Restore button
+                button.innerHTML = originalHtml;
+                button.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the product.');
+                
+                // Restore button
+                button.innerHTML = originalHtml;
+                button.disabled = false;
+            });
+        }
+        
+        function updateAllProducts() {
+            const button = document.getElementById('updateAllBtn');
+            const originalHtml = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            button.disabled = true;
+            
+            fetch('/api/products/update_all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-check"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                    
+                    // Suggest reloading to see new variants
+                    setTimeout(() => {
+                        if (confirm('Update completed! Reload page to see any new variants?')) {
+                            location.reload();
+                        }
+                    }, 2000);
+                } else {
+                    // Show error message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-danger alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-exclamation-triangle"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                }
+                
+                // Restore button
+                button.innerHTML = originalHtml;
+                button.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating products.');
+                
+                // Restore button
+                button.innerHTML = originalHtml;
+                button.disabled = false;
+            });
+        }
+        
         function toggleTracking(productId, button) {
             fetch(`/api/product/${productId}/track`, {
                 method: 'POST',

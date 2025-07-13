@@ -8,19 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">AliExpress Scraper</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="{{ url_for('index') }}">Home</a>
-                <a class="nav-link" href="{{ url_for('search_products') }}">Search</a>
-                <a class="nav-link active" href="{{ url_for('tracked_products') }}">Tracked Products</a>
-                <a class="nav-link" href="{{ url_for('scrape_results') }}">Add Products</a>
-                <a class="nav-link" href="{{ url_for('manage_keywords') }}">Keywords</a>
-                <a class="nav-link" href="{{ url_for('scraping_logs') }}">Logs</a>
-            </div>
-        </div>
-    </nav>
+    {% include 'base_navbar.html' %}
 
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">

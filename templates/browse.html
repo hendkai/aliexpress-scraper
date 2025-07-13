@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse Products - AliExpress Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .product-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            height: 100%;
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .product-image {
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+        }
+        .price-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+        }
+        .variant-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .product-title {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            height: 3em;
+            line-height: 1.5em;
+        }
+        .store-name {
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+        .tracked-indicator {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    {% include 'base_navbar.html' %}
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="fas fa-th-large"></i> Browse Products</h1>
+                <p class="text-muted">Explore all collected products with filtering and sorting options</p>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-primary fs-6">{{ products.total }} products found</span>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-section">
+            <form method="get" id="filterForm">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <select class="form-select" name="category" id="category">
+                            <option value="">All Categories</option>
+                            {% for cat in filter_options.categories %}
+                            <option value="{{ cat }}" {{ 'selected' if current_filters.category == cat }}>{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="store" class="form-label">Store</label>
+                        <select class="form-select" name="store" id="store">
+                            <option value="">All Stores</option>
+                            {% for store in filter_options.stores %}
+                            <option value="{{ store }}" {{ 'selected' if current_filters.store == store }}>{{ store }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="sort" class="form-label">Sort By</label>
+                        <select class="form-select" name="sort" id="sort">
+                            <option value="updated_at" {{ 'selected' if current_filters.sort == 'updated_at' }}>Recently Updated</option>
+                            <option value="price" {{ 'selected' if current_filters.sort == 'price' }}>Price</option>
+                            <option value="rating" {{ 'selected' if current_filters.sort == 'rating' }}>Rating</option>
+                            <option value="orders" {{ 'selected' if current_filters.sort == 'orders' }}>Popularity</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="order" class="form-label">Order</label>
+                        <select class="form-select" name="order" id="order">
+                            <option value="desc" {{ 'selected' if current_filters.order == 'desc' }}>High to Low</option>
+                            <option value="asc" {{ 'selected' if current_filters.order == 'asc' }}>Low to High</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="tracked_only" id="tracked_only" 
+                                   value="true" {{ 'checked' if current_filters.tracked_only }}>
+                            <label class="form-check-label" for="tracked_only">
+                                <i class="fas fa-star text-warning"></i> Tracked Only
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                        <a href="{{ url_for('browse_products') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Clear All
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Products Grid -->
+        {% if products.items %}
+        <div class="row">
+            {% for product in products.items %}
+            <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+                <div class="card product-card h-100 position-relative">
+                    <!-- Product Image -->
+                    {% if product.image_url %}
+                    <img src="{{ product.image_url }}" class="product-image w-100" alt="{{ product.title }}">
+                    {% else %}
+                    <div class="product-image w-100 d-flex align-items-center justify-content-center bg-light">
+                        <i class="fas fa-image fa-3x text-muted"></i>
+                    </div>
+                    {% endif %}
+
+                    <!-- Badges -->
+                    {% if product.is_tracked %}
+                    <div class="tracked-indicator">
+                        <span class="badge bg-warning">
+                            <i class="fas fa-star"></i> Tracked
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if product.variant_title %}
+                    <div class="variant-badge">
+                        <span class="badge bg-primary">{{ product.variant_title }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% set current_price = product.get_current_price() %}
+                    {% if current_price %}
+                    <div class="price-badge">
+                        <span class="badge bg-success">{{ current_price.sale_price }} {{ product.currency }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Card Body -->
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title product-title">{{ product.title }}</h6>
+                        
+                        {% if product.store_name %}
+                        <p class="store-name mb-2">
+                            <i class="fas fa-store"></i> {{ product.store_name }}
+                        </p>
+                        {% endif %}
+
+                        <!-- Price Info -->
+                        {% if current_price %}
+                        <div class="price-info mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="h6 text-success mb-0">{{ current_price.sale_price }} {{ product.currency }}</span>
+                                {% if current_price.discount_percentage %}
+                                <span class="badge bg-danger">-{{ current_price.discount_percentage }}%</span>
+                                {% endif %}
+                            </div>
+                            {% if current_price.original_price and current_price.original_price != current_price.sale_price %}
+                            <small class="text-muted text-decoration-line-through">{{ current_price.original_price }} {{ product.currency }}</small>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Product Stats -->
+                        <div class="product-stats mb-3 flex-grow-1">
+                            <div class="row text-center small">
+                                {% if product.rating %}
+                                <div class="col-6">
+                                    <i class="fas fa-star text-warning"></i>
+                                    <span>{{ product.rating }}/5</span>
+                                </div>
+                                {% endif %}
+                                {% if product.orders_count %}
+                                <div class="col-6">
+                                    <i class="fas fa-shopping-cart"></i>
+                                    <span>{{ product.orders_count }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mt-auto">
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('product_detail', product_id=product.id) }}" 
+                                   class="btn btn-primary btn-sm flex-grow-1">
+                                    <i class="fas fa-eye"></i> View Details
+                                </a>
+                                {% if not product.is_tracked %}
+                                <button class="btn btn-outline-warning btn-sm" 
+                                        onclick="toggleTracking({{ product.id }}, this)" 
+                                        title="Start tracking this product">
+                                    <i class="far fa-star"></i>
+                                </button>
+                                {% else %}
+                                <button class="btn btn-warning btn-sm" 
+                                        onclick="toggleTracking({{ product.id }}, this)" 
+                                        title="Stop tracking this product">
+                                    <i class="fas fa-star"></i>
+                                </button>
+                                {% endif %}
+                                <a href="{{ product.product_url }}" target="_blank" 
+                                   class="btn btn-outline-secondary btn-sm" title="View on AliExpress">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Last Updated -->
+                    <div class="card-footer text-muted small">
+                        <i class="fas fa-clock"></i> Updated: {{ product.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if products.pages > 1 %}
+        <nav aria-label="Product pagination" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if products.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('browse_products', page=products.prev_num, **current_filters) }}">Previous</a>
+                </li>
+                {% endif %}
+                
+                {% for page_num in products.iter_pages() %}
+                {% if page_num %}
+                {% if page_num != products.page %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('browse_products', page=page_num, **current_filters) }}">{{ page_num }}</a>
+                </li>
+                {% else %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+                {% endfor %}
+                
+                {% if products.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('browse_products', page=products.next_num, **current_filters) }}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h3 class="text-muted">No Products Found</h3>
+            <p class="text-muted">Try adjusting your filters or browse all products.</p>
+            <div class="mt-4">
+                <a href="{{ url_for('browse_products') }}" class="btn btn-primary me-2">
+                    <i class="fas fa-th-large"></i> Show All Products
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-plus"></i> Scrape New Products
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-submit form when filters change
+        document.querySelectorAll('#filterForm select, #filterForm input[type="checkbox"]').forEach(element => {
+            element.addEventListener('change', function() {
+                document.getElementById('filterForm').submit();
+            });
+        });
+
+        function toggleTracking(productId, button) {
+            const originalHtml = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            button.disabled = true;
+
+            fetch(`/api/product/${productId}/track`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update button appearance
+                    if (data.is_tracked) {
+                        button.className = 'btn btn-warning btn-sm';
+                        button.innerHTML = '<i class="fas fa-star"></i>';
+                        button.title = 'Stop tracking this product';
+                    } else {
+                        button.className = 'btn btn-outline-warning btn-sm';
+                        button.innerHTML = '<i class="far fa-star"></i>';
+                        button.title = 'Start tracking this product';
+                    }
+                    
+                    // Show success message briefly
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+                    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+                    alert.innerHTML = `
+                        <i class="fas fa-check"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(alert);
+                    
+                    // Auto remove after 3 seconds
+                    setTimeout(() => {
+                        if (alert.parentNode) {
+                            alert.remove();
+                        }
+                    }, 3000);
+                } else {
+                    alert('Error: ' + data.message);
+                    button.innerHTML = originalHtml;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the product.');
+                button.innerHTML = originalHtml;
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+        }
+    </script>
+</body>
+</html>

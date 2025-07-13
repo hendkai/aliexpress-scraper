@@ -6,26 +6,44 @@
     <title>{{ product.title }} - AliExpress Scraper</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .variant-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .variant-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .variant-image-container:hover .variant-card {
+            border-color: #0d6efd !important;
+        }
+        
+        .variant-card img {
+            transition: transform 0.3s ease;
+        }
+        
+        .variant-card:hover img {
+            transform: scale(1.05);
+        }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">AliExpress Scraper</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="{{ url_for('index') }}">Home</a>
-                <a class="nav-link" href="{{ url_for('search_products') }}">Search</a>
-                <a class="nav-link" href="{{ url_for('manage_keywords') }}">Keywords</a>
-                <a class="nav-link" href="{{ url_for('scraping_logs') }}">Logs</a>
-            </div>
-        </div>
-    </nav>
+    {% include 'base_navbar.html' %}
 
     <div class="container mt-4">
         <div class="row">
             <div class="col-md-8">
                 <div class="card">
                     <div class="card-body">
-                        <h1 class="card-title">{{ product.title }}</h1>
+                        <h1 class="card-title">
+                            {{ product.get_base_title() if product.variant_title else product.title }}
+                            {% if product.variant_title %}
+                            <br><span class="h4 text-primary"><i class="fas fa-microchip"></i> {{ product.variant_title }}</span>
+                            {% endif %}
+                        </h1>
                         
                         <div class="row">
                             <div class="col-md-6">
@@ -71,6 +89,9 @@
                                             <i class="{% if product.is_tracked %}fas{% else %}far{% endif %} fa-star"></i>
                                             {% if product.is_tracked %}Tracking{% else %}Track Product{% endif %}
                                         </button>
+                                        <button class="btn btn-outline-secondary" onclick="updateProduct({{ product.id }}, this)" title="Update this product and find new variants">
+                                            <i class="fas fa-sync-alt"></i> Update
+                                        </button>
                                         <a href="{{ product.product_url }}" target="_blank" class="btn btn-primary flex-grow-1">
                                             <i class="fas fa-external-link-alt"></i> View on AliExpress
                                         </a>
@@ -89,6 +110,15 @@
                     </div>
                     <div class="card-body">
                         <p><strong>Product ID:</strong> {{ product.product_id }}</p>
+                        {% if product.sku_id %}
+                        <p><strong>SKU ID:</strong> {{ product.sku_id }}</p>
+                        {% endif %}
+                        {% if product.spu_id %}
+                        <p><strong>SPU ID:</strong> {{ product.spu_id }}</p>
+                        {% endif %}
+                        {% if product.variant_title %}
+                        <p><strong>Variant:</strong> <span class="badge bg-primary">{{ product.variant_title }}</span></p>
+                        {% endif %}
                         <p><strong>First Added:</strong> {{ product.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
                         <p><strong>Last Updated:</strong> {{ product.updated_at.strftime('%Y-%m-%d %H:%M') }}</p>
                         {% if product.is_tracked %}
@@ -101,6 +131,111 @@
                 </div>
             </div>
         </div>
+
+        {% if related_variants|length > 0 %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-layer-group"></i> Available Variants ({{ related_variants|length }})</h5>
+                        <small class="text-muted">Click on a variant image to switch to that version</small>
+                    </div>
+                    <div class="card-body">
+                        <!-- Variant Image Gallery -->
+                        <div class="row mb-4">
+                            {% for variant in related_variants %}
+                            <div class="col-md-3 col-lg-2 mb-3">
+                                <div class="variant-image-container position-relative">
+                                    <a href="{{ url_for('product_detail', product_id=variant.id) }}" class="text-decoration-none">
+                                        <div class="card variant-card {% if variant.id == product.id %}border-primary bg-light{% else %}border-secondary{% endif %} h-100">
+                                            {% if variant.image_url %}
+                                            <img src="{{ variant.image_url }}" class="card-img-top" alt="{{ variant.variant_title or 'Variant' }}" style="height: 120px; object-fit: cover;">
+                                            {% else %}
+                                            <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 120px;">
+                                                <i class="fas fa-image text-muted fa-2x"></i>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <div class="card-body p-2">
+                                                <div class="text-center">
+                                                    {% if variant.variant_title %}
+                                                    <span class="badge bg-primary small">{{ variant.variant_title }}</span>
+                                                    {% else %}
+                                                    <span class="badge bg-secondary small">Standard</span>
+                                                    {% endif %}
+                                                    
+                                                    {% if variant.is_tracked %}
+                                                    <div class="mt-1">
+                                                        <i class="fas fa-star text-warning" title="Being tracked"></i>
+                                                    </div>
+                                                    {% endif %}
+                                                    
+                                                    {% if variant.id == product.id %}
+                                                    <div class="mt-1">
+                                                        <small class="text-primary fw-bold">Current</small>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Detailed Variant List -->
+                        <div class="row">
+                            {% for variant in related_variants %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card border {% if variant.is_tracked %}border-success{% elif variant.id == product.id %}border-primary{% else %}border-secondary{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            {% if variant.variant_title %}
+                                            <span class="badge bg-primary">{{ variant.variant_title }}</span>
+                                            {% else %}
+                                            Standard Version
+                                            {% endif %}
+                                            {% if variant.is_tracked %}
+                                            <i class="fas fa-star text-warning ms-2" title="Being tracked"></i>
+                                            {% endif %}
+                                            {% if variant.id == product.id %}
+                                            <span class="badge bg-info ms-2">Current</span>
+                                            {% endif %}
+                                        </h6>
+                                        
+                                        {% set variant_price = variant.get_current_price() %}
+                                        {% if variant_price %}
+                                        <p class="text-success fw-bold mb-1">{{ variant_price.sale_price }} {{ variant.currency }}</p>
+                                        {% if variant_price.original_price and variant_price.original_price != variant_price.sale_price %}
+                                        <p class="text-muted small text-decoration-line-through mb-2">{{ variant_price.original_price }} {{ variant.currency }}</p>
+                                        {% endif %}
+                                        {% endif %}
+                                        
+                                        <div class="d-flex gap-1">
+                                            <a href="{{ url_for('product_detail', product_id=variant.id) }}" class="btn btn-primary btn-sm flex-grow-1">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                            {% if not variant.is_tracked %}
+                                            <button class="btn btn-outline-warning btn-sm" onclick="toggleTracking({{ variant.id }}, this)" title="Track this variant">
+                                                <i class="far fa-star"></i>
+                                            </button>
+                                            {% else %}
+                                            <button class="btn btn-success btn-sm" disabled title="Already tracked">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         {% if price_history %}
         <div class="row mt-4">
@@ -164,6 +299,64 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function updateProduct(productId, button) {
+            // Disable button and show loading state
+            const originalHtml = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finding & Tracking Variants...';
+            button.disabled = true;
+            
+            fetch(`/api/product/${productId}/update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-check"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                    
+                    // If variants were found or tracked, suggest reloading
+                    if ((data.new_variants && data.new_variants > 0) || (data.tracked_count && data.tracked_count > 0)) {
+                        setTimeout(() => {
+                            if (confirm(`Successfully processed variants! Reload page to see updates?`)) {
+                                location.reload();
+                            }
+                        }, 2000);
+                    }
+                } else {
+                    // Show error message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-danger alert-dismissible fade show';
+                    alert.innerHTML = `
+                        <i class="fas fa-exclamation-triangle"></i> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+                }
+                
+                // Restore button
+                button.innerHTML = originalHtml;
+                button.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the product.');
+                
+                // Restore button
+                button.innerHTML = originalHtml;
+                button.disabled = false;
+            });
+        }
+        
+        
         function toggleTracking(productId, button) {
             fetch(`/product/${productId}/toggle_tracking`, {
                 method: 'POST',
