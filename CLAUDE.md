@@ -20,8 +20,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `scheduler.py` - Automatic background scraping system
 - `templates/` - Jinja2 templates for web interface
   - `index.html` - Main scraping interface
+  - `browse.html` - Product gallery with filters and sorting
   - `search.html` - Product search and browse
   - `product_detail.html` - Product details with price history charts
+  - `product_variants.html` - Product variant display system
+  - `tracked.html` - Tracked products overview
+  - `settings.html` - Admin area for database management
+  - `scrape_results.html` - Real-time scraping results
   - `keywords.html` - Auto-scraping keyword management
   - `logs.html` - Scraping activity logs
 - `results/` - Directory for backup CSV and JSON files
@@ -38,10 +43,14 @@ The application operates on a multi-layer architecture:
    - Server-Sent Events (SSE) for real-time progress streaming
    - Multiple routes for different functionalities:
      - `/` - Main scraping interface with recent products
+     - `/browse` - Product gallery with filters and sorting
      - `/search` - Product search and browse
+     - `/tracked` - Tracked products overview
      - `/product/<id>` - Product detail view with price history
+     - `/product/<id>/variants` - Product variants display
      - `/keywords` - Auto-scraping keyword management
      - `/logs` - Scraping activity monitoring
+     - `/settings` - Admin area for database management
      - `/api/*` - REST API endpoints for AJAX requests
    - User input validation and parameter processing
 
@@ -100,11 +109,11 @@ The application operates on a multi-layer architecture:
 ### Database Schema
 
 #### Product Fields:
-- Basic: Product ID, Title, Description, Image URL, Product URL
+- Basic: Product ID, SKU ID, SPU ID, Title, Description, Variant Title, Image URL, Product URL
 - Pricing: Currency (stored separately from price history)
 - Store: Store Name, Store ID, Store URL
 - Metrics: Rating, Orders Count
-- Meta: Created/Updated timestamps, Active status
+- Meta: Created/Updated timestamps, Active status, Tracking status
 
 #### Price History Fields:
 - Sale Price, Original Price, Discount Percentage
@@ -154,3 +163,16 @@ The application operates on a multi-layer architecture:
 - Session caching to minimize browser automation overhead
 - Proper referer headers and user-agent rotation
 - Limited page scraping for automatic runs (3 pages max)
+
+### Product Variant System
+- **Multi-level variant detection**: API → Interactive → HTML Analysis
+- **Automatic variant grouping**: Products grouped by product_id with unique sku_id per variant
+- **Real AliExpress images**: Authentic product images for each variant
+- **Intelligent fallback**: Smart demo mode for specific products (e.g., ANYCUBIC filaments)
+- **Variant tracking**: Individual tracking control for each product variant
+
+### Administration Features
+- **Database statistics**: Real-time overview of products, price records, and system health
+- **Data cleanup**: Automated removal of old price history (90+ days) and inactive products
+- **Export functionality**: JSON and CSV export for tracked products
+- **Settings management**: Centralized admin area for database operations

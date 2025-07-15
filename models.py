@@ -72,13 +72,11 @@ class Product(db.Model):
         """Start tracking this product"""
         self.is_tracked = True
         self.tracked_since = datetime.utcnow()
-        db.session.commit()
     
     def stop_tracking(self):
         """Stop tracking this product"""
         self.is_tracked = False
         self.tracked_since = None
-        db.session.commit()
     
     def get_variants(self):
         """Get all variants of this product (products with same product_id but different SKU)"""

@@ -477,9 +477,17 @@ def save_results_to_database(keyword, data, track_products=False):
             if not product_id:
                 continue
             
-            # For regular scraping, use product_id as sku_id if no specific sku_id exists
+            # For regular scraping, create unique sku_id if no specific sku_id exists
             if not sku_id:
-                sku_id = product_id
+                # Generate unique SKU ID to prevent conflicts
+                variant_title = item.get('Variant Title', '')
+                if variant_title:
+                    # Create unique SKU based on product_id and variant
+                    import hashlib
+                    variant_hash = hashlib.md5(variant_title.encode()).hexdigest()[:8]
+                    sku_id = f"{product_id}_{variant_hash}"
+                else:
+                    sku_id = product_id
             
             # Check if this specific variant (SKU) already exists
             existing_product = Product.query.filter_by(sku_id=str(sku_id)).first()
@@ -701,6 +709,364 @@ def run_scrape_job(keyword, pages, apply_discount, free_shipping, min_price, max
     finally:
         yield "data: PROCESS_COMPLETE\n\n"
 
+def scrape_enhanced_variants(product_url, log_callback=default_logger, product_title=None):
+    """
+    Enhanced variant scraping that specifically handles data-sku-col structure
+    from AliExpress product pages with proper price extraction.
+    """
+    try:
+        log_callback(f"Enhanced variant scraping for: {product_url}")
+        
+        # Extract product ID from URL
+        import re
+        url_match = re.search(r'/item/(\d+)\.html', product_url)
+        base_product_id = url_match.group(1) if url_match else None
+        
+        if not base_product_id:
+            log_callback("Could not extract product ID from URL")
+            return []
+        
+        # Set up browser with better stealth options
+        co = ChromiumOptions()
+        co.no_imgs(False)  # We need images for variants
+        co.headless()
+        user_agent_string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        co.set_user_agent(user_agent_string)
+        co.set_argument('--disable-blink-features=AutomationControlled')
+        co.set_pref('credentials_enable_service', False)
+        co.set_pref('profile.password_manager_enabled', False)
+        co.set_argument("--excludeSwitches", "enable-automation")
+        co.set_argument("--disable-web-security")
+        co.set_argument("--disable-features=VizDisplayCompositor")
+        
+        browser_page = WebPage(chromium_options=co)
+        browser_page.set.load_mode.eager()
+        
+        log_callback("Loading product page for enhanced variant scraping...")
+        browser_page.get(product_url, timeout=30)
+        
+        # Wait for page to fully load
+        log_callback("Waiting for page content to load...")
+        time.sleep(8)  # Increased wait time
+        
+        # Wait for variant elements to load
+        try:
+            browser_page.wait.eles_loaded('[data-sku-col]', timeout=15)
+            log_callback("SKU variant elements loaded successfully")
+        except:
+            log_callback("SKU variant elements not found, trying alternative selectors")
+            time.sleep(3)
+        
+        variants = []
+        
+        # Try multiple selectors for variant containers
+        sku_containers = []
+        
+        # Strategy 1: Direct data-sku-col elements
+        sku_containers = browser_page.eles('div[data-sku-col]', timeout=5)
+        log_callback(f"Strategy 1: Found {len(sku_containers)} variant containers with div[data-sku-col]")
+        
+        if not sku_containers:
+            # Strategy 2: Any element with data-sku-col attribute
+            sku_containers = browser_page.eles('[data-sku-col]', timeout=3)
+            log_callback(f"Strategy 2: Found {len(sku_containers)} variant containers with [data-sku-col]")
+        
+        if not sku_containers:
+            # Strategy 3: Look for specific class patterns
+            sku_containers = browser_page.eles('.sku-item--image--jMUnnGA', timeout=3)
+            log_callback(f"Strategy 3: Found {len(sku_containers)} variant containers with sku-item--image class")
+        
+        if not sku_containers:
+            # Strategy 4: Look inside sku-item--skus container
+            sku_row = browser_page.ele('.sku-item--skus--StEhULs', timeout=3)
+            if sku_row:
+                sku_containers = sku_row.eles('[data-sku-col]', timeout=2)
+                log_callback(f"Strategy 4: Found {len(sku_containers)} variant containers inside sku-item--skus")
+        
+        if not sku_containers:
+            # Strategy 5: Any div with both data-sku-col and containing img
+            sku_containers = browser_page.eles('div[data-sku-col] img', timeout=3)
+            if sku_containers:
+                # Get parent divs of img elements
+                sku_containers = [img.parent() for img in sku_containers if img.parent()]
+                log_callback(f"Strategy 5: Found {len(sku_containers)} variant containers via img parent lookup")
+        
+        # Log final result
+        log_callback(f"Final result: Processing {len(sku_containers)} variant containers")
+        
+        # Always try static HTML parsing first as it's more reliable
+        log_callback("Trying static HTML parsing first")
+        try:
+            page_html = browser_page.html
+            static_variants = parse_static_variant_html(page_html, base_product_id, log_callback)
+            if static_variants and len(static_variants) > 0:
+                log_callback(f"Static HTML parsing succeeded with {len(static_variants)} variants")
+                browser_page.quit()
+                return static_variants
+        except Exception as e:
+            log_callback(f"Static HTML parsing failed: {e}")
+        
+        if not sku_containers:
+            log_callback("No variant containers found with browser automation, falling back to interactive scraping")
+            browser_page.quit()
+            return scrape_interactive_variants(product_url, log_callback, product_title)
+        
+        # Extract base product information for pricing context
+        base_price_element = browser_page.ele('.price--current--I3Zeidd', timeout=3)
+        base_price = base_price_element.text.strip() if base_price_element else None
+        
+        # Process each variant container
+        for i, container in enumerate(sku_containers[:15]):  # Limit to 15 variants
+            try:
+                log_callback(f"Processing variant {i+1}/{min(len(sku_containers), 15)}")
+                
+                # Extract data-sku-col attribute
+                sku_col_value = container.attr('data-sku-col')
+                if not sku_col_value:
+                    log_callback(f"No data-sku-col found for variant {i+1}")
+                    continue
+                
+                # Find image within the container with improved loading
+                variant_image = None
+                variant_alt = ''
+                
+                # Try multiple image selectors and wait for loading
+                img_selectors = ['img', 'img[src]', '[class*="image"] img']
+                for img_selector in img_selectors:
+                    try:
+                        img_element = container.ele(img_selector, timeout=3)
+                        if img_element:
+                            variant_alt = img_element.attr('alt') or ''
+                            # Wait for image to load
+                            for _ in range(5):
+                                src = img_element.attr('src')
+                                if src and not src.startswith('data:') and 'placeholder' not in src.lower():
+                                    variant_image = src
+                                    break
+                                time.sleep(0.5)
+                            if variant_image:
+                                break
+                    except:
+                        continue
+                
+                if not variant_image:
+                    log_callback(f"No valid image found for variant {i+1}, continuing anyway")
+                    variant_image = ''
+                
+                # Clean up image URL
+                if variant_image and not variant_image.startswith('http'):
+                    if variant_image.startswith('//'):
+                        variant_image = 'https:' + variant_image
+                    else:
+                        variant_image = 'https://' + variant_image
+                
+                # Extract variant name from alt text
+                variant_name = extract_variant_from_alt_text(variant_alt)
+                if not variant_name:
+                    variant_name = variant_alt or f"Variant {sku_col_value}"
+                
+                log_callback(f"Found variant: {variant_name} (SKU: {sku_col_value})")
+                
+                # Click on the variant to get specific pricing
+                current_price = None
+                original_price = None
+                
+                try:
+                    # Scroll to element if needed
+                    container.scroll.to_see()
+                    time.sleep(0.5)
+                    
+                    # Click on the variant
+                    container.click()
+                    log_callback(f"Clicked on variant {variant_name}")
+                    time.sleep(2)  # Wait for price update
+                    
+                    # Extract updated price after clicking
+                    price_selectors = [
+                        '.price--current--I3Zeidd .price--currentPriceText--V8_y_b5',
+                        '.price--currentPriceText--V8_y_b5',
+                        '.product-price-current .product-price-value',
+                        '[class*="current"][class*="price"]'
+                    ]
+                    
+                    for price_selector in price_selectors:
+                        try:
+                            price_element = browser_page.ele(price_selector, timeout=2)
+                            if price_element:
+                                current_price = price_element.text.strip()
+                                break
+                        except:
+                            continue
+                    
+                    # Extract original price
+                    original_price_selectors = [
+                        '.price--original--wEueRiZ .price--originalText--gxVO5_d',
+                        '.price--originalText--gxVO5_d',
+                        '[class*="original"][class*="price"]'
+                    ]
+                    
+                    for orig_selector in original_price_selectors:
+                        try:
+                            orig_element = browser_page.ele(orig_selector, timeout=1)
+                            if orig_element:
+                                original_price = orig_element.text.strip()
+                                break
+                        except:
+                            continue
+                    
+                    log_callback(f"Extracted price for {variant_name}: Current={current_price}, Original={original_price}")
+                    
+                except Exception as e:
+                    log_callback(f"Error clicking variant {variant_name}: {e}")
+                    # Use base price as fallback
+                    current_price = base_price
+                
+                # Create variant data with enhanced SKU ID
+                sku_id = f"{base_product_id}_{sku_col_value}"
+                variant_data = {
+                    'sku_id': sku_id,
+                    'product_id': base_product_id,
+                    'variant_title': variant_name,
+                    'image_url': variant_image,
+                    'alt_text': variant_alt,
+                    'sku_col': sku_col_value,
+                    'sale_price': current_price,
+                    'original_price': original_price,
+                    'source': 'enhanced_sku_col'
+                }
+                variants.append(variant_data)
+                
+                log_callback(f"Successfully captured variant: {variant_name} - Price: {current_price}")
+                
+            except Exception as e:
+                log_callback(f"Error processing variant {i+1}: {e}")
+                continue
+        
+        browser_page.quit()
+        
+        log_callback(f"Successfully extracted {len(variants)} enhanced variants")
+        return variants
+        
+    except Exception as e:
+        log_callback(f"Error in enhanced variant scraping: {e}")
+        try:
+            browser_page.quit()
+        except:
+            pass
+        # Fallback to original interactive scraping
+        return scrape_interactive_variants(product_url, log_callback, product_title)
+
+def extract_variant_pricing_from_static(browser_page, static_variants, log_callback):
+    """
+    Extract pricing for static variants by clicking on each variant
+    """
+    import time
+    
+    log_callback(f"Extracting pricing for {len(static_variants)} static variants")
+    
+    enhanced_variants = []
+    
+    for i, variant in enumerate(static_variants[:35]):  # Limit to 35 variants
+        try:
+            log_callback(f"Processing variant {i+1}/{len(static_variants[:35])}: {variant.get('variant_title', 'Unknown')}")
+            
+            # Find the variant element by data-sku-col
+            sku_col = variant.get('sku_col', '')
+            if not sku_col:
+                log_callback(f"No SKU col found for variant {i+1}")
+                continue
+            
+            # Try to find the variant element
+            variant_selector = f'[data-sku-col="{sku_col}"]'
+            try:
+                variant_element = browser_page.ele(variant_selector, timeout=2)
+                if not variant_element:
+                    log_callback(f"Variant element not found for SKU {sku_col}")
+                    continue
+                
+                # Scroll to element and click
+                variant_element.scroll.to_see()
+                time.sleep(0.5)
+                variant_element.click()
+                log_callback(f"Clicked variant {sku_col}")
+                
+                # Wait for price update with progressive checks
+                current_price = None
+                original_price = None
+                
+                # Progressive wait for price update
+                for wait_attempt in range(8):  # Try up to 4 seconds
+                    time.sleep(0.5)
+                    
+                    # Try multiple price selectors
+                    price_selectors = [
+                        '.price--currentPriceText--V8_y_b5',
+                        '.price--current--I3Zeidd .price--currentPriceText--V8_y_b5',
+                        '.price--currentPriceText--V8_y_b5.pdp-comp-price-current.product-price-value',
+                        '.product-price-value',
+                        '[class*="currentPriceText"]'
+                    ]
+                    
+                    for selector in price_selectors:
+                        try:
+                            price_element = browser_page.ele(selector, timeout=1)
+                            if price_element and price_element.text.strip():
+                                current_price = price_element.text.strip()
+                                log_callback(f"Found price: {current_price}")
+                                break
+                        except:
+                            continue
+                    
+                    if current_price:
+                        break
+                
+                # Try to get original price
+                original_price_selectors = [
+                    '.price--originalText--vVXzWPt',
+                    '.price--original--I3Zeidd',
+                    '[class*="originalText"]',
+                    '[class*="original"][class*="price"]'
+                ]
+                
+                for selector in original_price_selectors:
+                    try:
+                        orig_element = browser_page.ele(selector, timeout=1)
+                        if orig_element and orig_element.text.strip():
+                            original_price = orig_element.text.strip()
+                            break
+                    except:
+                        continue
+                
+                # Create enhanced variant data
+                enhanced_variant = {
+                    'sku_id': variant.get('sku_id'),
+                    'product_id': variant.get('product_id'),
+                    'variant_name': variant.get('variant_title'),
+                    'variant_title': variant.get('variant_title'),
+                    'image_url': variant.get('image_url'),
+                    'alt_text': variant.get('alt_text'),
+                    'sku_col': sku_col,
+                    'current_price': current_price,
+                    'sale_price': current_price,
+                    'original_price': original_price,
+                    'source': 'static_with_dynamic_pricing'
+                }
+                
+                enhanced_variants.append(enhanced_variant)
+                
+                log_callback(f"Enhanced variant: {variant.get('variant_title')} - Price: {current_price}")
+                
+            except Exception as e:
+                log_callback(f"Error processing variant {sku_col}: {e}")
+                continue
+                
+        except Exception as e:
+            log_callback(f"Error processing variant {i+1}: {e}")
+            continue
+    
+    log_callback(f"Successfully extracted pricing for {len(enhanced_variants)} variants")
+    return enhanced_variants
+
 def scrape_interactive_variants(product_url, log_callback=default_logger, product_title=None):
     """
     Interactive variant scraping that navigates through color/size options 
@@ -749,14 +1115,15 @@ def scrape_interactive_variants(product_url, log_callback=default_logger, produc
         
         variants = []
         
-        # Look for SKU variant containers based on your provided HTML structure
+        # Look for SKU variant containers based on the provided HTML structure
         sku_selectors = [
             'div[data-sku-col]',  # Primary SKU containers from your example
             '.sku-item--image--jMUnnGA',  # Specific class from your example
             '[class*="sku-item--image"]', # Any class containing sku-item--image
             '.sku-item',          # Alternative SKU items
             '[class*="sku-item"]', # Any class containing sku-item
-            'div[class*="sku"]'   # Any div with sku in class name
+            'div[class*="sku"]',   # Any div with sku in class name
+            '[data-sku-col]'      # Any element with data-sku-col attribute
         ]
         
         sku_elements = []
@@ -1133,8 +1500,10 @@ def scrape_real_product_variants(product_id, log_callback=default_logger):
                 # Extract variant attributes from skuAttr
                 variant_attributes = parse_sku_attributes(sku_attr, sku_property_list)
                 
-                # Get variant image
+                # Get variant image with improved extraction
                 variant_image = None
+                
+                # Try multiple image extraction methods
                 for prop in sku_property_list:
                     if 'skuPropertyValues' in prop:
                         for value in prop['skuPropertyValues']:
@@ -1143,20 +1512,47 @@ def scrape_real_product_variants(product_id, log_callback=default_logger):
                                 prop_id = str(prop.get('skuPropertyId', ''))
                                 value_id = str(value.get('propertyValueId', ''))
                                 if f"{prop_id}:{value_id}" in sku_attr:
-                                    variant_image = 'https:' + value['skuPropertyImagePath']
+                                    image_path = value['skuPropertyImagePath']
+                                    if image_path:
+                                        if image_path.startswith('//'):
+                                            variant_image = 'https:' + image_path
+                                        elif image_path.startswith('http'):
+                                            variant_image = image_path
+                                        else:
+                                            variant_image = 'https://' + image_path
                                     break
+                    if variant_image:
+                        break
                 
-                # Extract prices with proper formatting
+                # Fallback: try to get any image from the variant attributes
+                if not variant_image and variant_attributes:
+                    for attr_value in variant_attributes.values():
+                        if 'image' in str(attr_value).lower():
+                            variant_image = attr_value
+                            break
+                
+                # Extract prices with proper formatting and validation
                 sku_val = sku_price.get('skuVal', {})
-                sale_price = sku_val.get('skuCalPrice')
-                original_price = sku_val.get('skuPrice')
+                sale_price = sku_val.get('skuCalPrice') or sku_val.get('actSkuCalPrice') or sku_val.get('skuAmount')
+                original_price = sku_val.get('skuPrice') or sku_val.get('skuMultiCurrencyCalPrice')
                 discount = sku_val.get('discount')
                 
-                # Convert to string format if they're numbers
-                if isinstance(sale_price, (int, float)):
-                    sale_price = str(sale_price)
-                if isinstance(original_price, (int, float)):
-                    original_price = str(original_price)
+                # Validate and convert prices
+                if sale_price is not None:
+                    if isinstance(sale_price, (int, float)):
+                        sale_price = f"{sale_price:.2f}"
+                    else:
+                        sale_price = str(sale_price)
+                else:
+                    sale_price = None
+                    
+                if original_price is not None:
+                    if isinstance(original_price, (int, float)):
+                        original_price = f"{original_price:.2f}"
+                    else:
+                        original_price = str(original_price)
+                else:
+                    original_price = sale_price  # Use sale price as fallback
                 
                 variant_data = {
                     'sku_id': sku_id,
@@ -1237,6 +1633,75 @@ def scrape_product_variants(product_url, log_callback=default_logger):
         
     except Exception as e:
         log_callback(f"Error scraping variants: {e}")
+        return []
+
+def parse_static_variant_html(html_content, product_id, log_callback=default_logger):
+    """
+    Parse static HTML content for variant information using the specific 
+    data-sku-col structure provided by the user.
+    """
+    try:
+        import re
+        
+        log_callback("Parsing static HTML for variant information")
+        
+        # Extract all variant divs with data-sku-col attributes
+        # Updated pattern to handle the actual HTML structure better
+        variant_pattern = r'<div[^>]*data-sku-col="([^"]+)"[^>]*>.*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]+)"[^>]*>.*?</div>'
+        
+        matches = re.findall(variant_pattern, html_content, re.DOTALL | re.IGNORECASE)
+        
+        log_callback(f"Found {len(matches)} variant matches with primary pattern")
+        
+        # If no matches found, try alternative patterns
+        if not matches:
+            # Try more flexible pattern
+            alt_pattern = r'data-sku-col="([^"]+)"[^>]*>.*?<img[^>]*src="([^"]+)"[^>]*alt="([^"]+)"'
+            matches = re.findall(alt_pattern, html_content, re.DOTALL | re.IGNORECASE)
+            log_callback(f"Found {len(matches)} variant matches with alternative pattern")
+            
+        if not matches:
+            # Try even more flexible pattern
+            loose_pattern = r'data-sku-col="([^"]+)".*?src="([^"]+)".*?alt="([^"]+)"'
+            matches = re.findall(loose_pattern, html_content, re.DOTALL | re.IGNORECASE)
+            log_callback(f"Found {len(matches)} variant matches with loose pattern")
+        
+        variants = []
+        for match in matches:
+            sku_col, image_url, alt_text = match
+            
+            # Clean up image URL
+            if image_url and not image_url.startswith('http'):
+                if image_url.startswith('//'):
+                    image_url = 'https:' + image_url
+                else:
+                    image_url = 'https://' + image_url
+            
+            # Extract variant name from alt text
+            variant_name = extract_variant_from_alt_text(alt_text)
+            if not variant_name:
+                variant_name = alt_text
+            
+            # Create variant data
+            sku_id = f"{product_id}_{sku_col}"
+            variant_data = {
+                'sku_id': sku_id,
+                'product_id': product_id,
+                'variant_title': variant_name,
+                'image_url': image_url,
+                'alt_text': alt_text,
+                'sku_col': sku_col,
+                'source': 'static_html_parse'
+            }
+            
+            variants.append(variant_data)
+            log_callback(f"Extracted static variant: {variant_name} (SKU: {sku_col})")
+        
+        log_callback(f"Successfully parsed {len(variants)} variants from static HTML")
+        return variants
+        
+    except Exception as e:
+        log_callback(f"Error parsing static HTML variants: {e}")
         return []
 
 def extract_variant_from_sku_alt(alt_text):

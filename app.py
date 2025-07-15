@@ -209,18 +209,38 @@ def debug_product_variants(product_id):
 
 @app.route('/product/<int:product_id>/toggle_tracking', methods=['POST'])
 def toggle_product_tracking(product_id):
-    product = Product.query.get_or_404(product_id)
-    
-    if product.is_tracked:
-        product.stop_tracking()
-    else:
-        product.start_tracking()
-    
-    return jsonify({
-        'success': True,
-        'is_tracked': product.is_tracked,
-        'message': 'Product tracking started' if product.is_tracked else 'Product tracking stopped'
-    })
+    try:
+        product = Product.query.get_or_404(product_id)
+        
+        # Get all variants of this product (same product_id)
+        all_variants = Product.query.filter_by(product_id=product.product_id).all()
+        
+        if product.is_tracked:
+            # Stop tracking all variants
+            for variant in all_variants:
+                variant.is_tracked = False
+                variant.tracked_since = None
+            message = f'Stopped tracking {len(all_variants)} variants'
+        else:
+            # Start tracking all variants
+            for variant in all_variants:
+                variant.is_tracked = True
+                variant.tracked_since = datetime.utcnow()
+            message = f'Started tracking {len(all_variants)} variants'
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'is_tracked': product.is_tracked,
+            'message': message
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error updating tracking status: {str(e)}'
+        }), 500
 
 @app.route('/scrape_results')
 def scrape_results():
@@ -368,21 +388,34 @@ def api_price_history(product_id):
 
 @app.route('/api/product/<int:product_id>/track', methods=['POST'])
 def api_track_product(product_id):
-    product = Product.query.get_or_404(product_id)
-    
-    if not product.is_tracked:
-        product.start_tracking()
-        message = f"Started tracking {product.variant_title or 'product'}"
-        if product.variant_title:
-            message += f" (Variant: {product.variant_title})"
-    else:
-        message = "Product is already being tracked"
-    
-    return jsonify({
-        'success': True,
-        'is_tracked': product.is_tracked,
-        'message': message
-    })
+    try:
+        product = Product.query.get_or_404(product_id)
+        
+        # Get all variants of this product (same product_id)
+        all_variants = Product.query.filter_by(product_id=product.product_id).all()
+        
+        if not product.is_tracked:
+            # Start tracking all variants
+            for variant in all_variants:
+                variant.is_tracked = True
+                variant.tracked_since = datetime.utcnow()
+            message = f"Started tracking {len(all_variants)} variants"
+        else:
+            message = "Product variants are already being tracked"
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'is_tracked': product.is_tracked,
+            'message': message
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error updating tracking status: {str(e)}'
+        }), 500
 
 @app.route('/api/product/<int:product_id>/scrape_variants', methods=['POST'])
 def api_scrape_variants(product_id):
@@ -390,7 +423,7 @@ def api_scrape_variants(product_id):
     product = Product.query.get_or_404(product_id)
     
     try:
-        from scraper import scrape_real_product_variants, scrape_html_variants, save_results_to_database
+        from scraper import scrape_real_product_variants, scrape_html_variants, scrape_enhanced_variants, save_results_to_database
         
         # Extract main product ID from product_id field
         main_product_id = product.product_id
@@ -403,7 +436,24 @@ def api_scrape_variants(product_id):
         # Try API-based variant scraping first
         variants_data = scrape_real_product_variants(main_product_id)
         
-        # If API scraping fails, try HTML-based variant detection
+        # If API scraping fails, try enhanced variant detection (handles data-sku-col)
+        if not variants_data and product.product_url:
+            enhanced_variants = scrape_enhanced_variants(product.product_url, product_title=product.title)
+            if enhanced_variants:
+                # Convert enhanced variants to the same format as API variants
+                variants_data = []
+                for variant in enhanced_variants:
+                    variants_data.append({
+                        'product_id': main_product_id,
+                        'sku_id': variant.get('sku_id', f"{main_product_id}_enhanced_{len(variants_data)}"),
+                        'variant_title': variant.get('variant_title'),
+                        'image_url': variant.get('image_url'),
+                        'sale_price': variant.get('sale_price'),
+                        'original_price': variant.get('original_price'),
+                        'source': 'enhanced_sku_col'
+                    })
+        
+        # If enhanced method fails, try HTML-based variant detection
         if not variants_data and product.product_url:
             # Pass product title for better variant detection
             html_variants = scrape_html_variants(product.product_url, product_title=product.title)
@@ -522,7 +572,7 @@ def api_update_product(product_id):
     product = Product.query.get_or_404(product_id)
     
     try:
-        from scraper import scrape_real_product_variants, scrape_html_variants, save_results_to_database
+        from scraper import scrape_real_product_variants, scrape_html_variants, scrape_enhanced_variants, save_results_to_database
         
         # Extract main product ID from product_id field
         main_product_id = product.product_id
@@ -535,7 +585,24 @@ def api_update_product(product_id):
         # Try API-based variant scraping first
         variants_data = scrape_real_product_variants(main_product_id)
         
-        # If API scraping fails or finds no variants, try interactive variant detection
+        # If API scraping fails or finds no variants, try enhanced variant detection first
+        if (not variants_data or len(variants_data) == 0) and product.product_url:
+            enhanced_variants = scrape_enhanced_variants(product.product_url, product_title=product.title)
+            if enhanced_variants:
+                # Convert enhanced variants to the same format as API variants
+                variants_data = []
+                for variant in enhanced_variants:
+                    variants_data.append({
+                        'product_id': main_product_id,
+                        'sku_id': variant.get('sku_id', f"{main_product_id}_enhanced_{len(variants_data)}"),
+                        'variant_title': variant.get('variant_title'),
+                        'image_url': variant.get('image_url'),
+                        'sale_price': variant.get('sale_price'),
+                        'original_price': variant.get('original_price'),
+                        'source': 'enhanced_sku_col'
+                    })
+        
+        # If enhanced method fails, try interactive variant detection
         if (not variants_data or len(variants_data) == 0) and product.product_url:
             from scraper import scrape_interactive_variants
             interactive_variants = scrape_interactive_variants(product.product_url, product_title=product.title)
@@ -920,4 +987,4 @@ def api_export_data():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, threaded=True)
+    app.run(debug=True, threaded=True, host='0.0.0.0')
