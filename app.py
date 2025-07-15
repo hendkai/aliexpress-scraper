@@ -566,6 +566,213 @@ def api_scrape_variants(product_id):
             'message': f'Error scraping variants: {str(e)}'
         }), 500
 
+@app.route('/stream-variant-scrape/<int:product_id>')
+def stream_variant_scrape(product_id):
+    """Stream variant scraping progress in real-time"""
+    def generate():
+        import time
+        import json
+        
+        def send_data(data):
+            """Helper to send properly formatted SSE data"""
+            yield f"data: {json.dumps(data)}\n\n"
+        
+        def send_heartbeat():
+            """Send heartbeat to keep connection alive"""
+            yield ": heartbeat\n\n"
+        
+        try:
+            product = Product.query.get_or_404(product_id)
+            
+            yield from send_data({
+                'status': 'started', 
+                'message': f'Starting variant scraping for {product.title[:50]}...'
+            })
+            
+            from scraper import scrape_real_product_variants, scrape_enhanced_variants, scrape_interactive_variants, save_results_to_database
+            
+            # Extract main product ID from product_id field
+            main_product_id = product.product_id
+            if not main_product_id:
+                yield from send_data({
+                    'status': 'error', 
+                    'message': 'Product has no valid AliExpress product ID'
+                })
+                return
+            
+            yield from send_data({
+                'status': 'progress', 
+                'message': 'Trying API-based variant detection...', 
+                'step': 1, 
+                'total': 4
+            })
+            
+            # Send heartbeat before potentially long operation
+            yield from send_heartbeat()
+            
+            # Try API-based variant scraping first
+            variants_data = scrape_real_product_variants(main_product_id, log_callback=lambda msg: None)
+            
+            # Send heartbeat after operation
+            yield from send_heartbeat()
+            
+            if variants_data and len(variants_data) > 0:
+                yield from send_data({
+                    'status': 'progress', 
+                    'message': f'Found {len(variants_data)} variants via API', 
+                    'step': 4, 
+                    'total': 4
+                })
+            else:
+                yield from send_data({
+                    'status': 'progress', 
+                    'message': 'API method found no variants, trying enhanced detection...', 
+                    'step': 2, 
+                    'total': 4
+                })
+                
+                # Send heartbeat before next operation
+                yield from send_heartbeat()
+                
+                # Try enhanced variant detection
+                if product.product_url:
+                    enhanced_variants = scrape_enhanced_variants(
+                        product.product_url, 
+                        log_callback=lambda msg: None,
+                        product_title=product.title
+                    )
+                    
+                    # Send heartbeat after operation
+                    yield from send_heartbeat()
+                    
+                    if enhanced_variants and len(enhanced_variants) > 0:
+                        yield from send_data({
+                            'status': 'progress', 
+                            'message': f'Found {len(enhanced_variants)} variants via enhanced detection', 
+                            'step': 4, 
+                            'total': 4
+                        })
+                        # Convert enhanced variants to the same format as API variants
+                        variants_data = []
+                        for variant in enhanced_variants:
+                            variants_data.append({
+                                'product_id': main_product_id,
+                                'sku_id': variant.get('sku_id', f"{main_product_id}_enhanced_{len(variants_data)}"),
+                                'variant_title': variant.get('variant_title'),
+                                'image_url': variant.get('image_url'),
+                                'sale_price': variant.get('sale_price'),
+                                'original_price': variant.get('original_price'),
+                                'source': 'enhanced_sku_col'
+                            })
+                    else:
+                        yield from send_data({
+                            'status': 'progress', 
+                            'message': 'Enhanced method found no variants, trying interactive detection...', 
+                            'step': 3, 
+                            'total': 4
+                        })
+                        
+                        # Send heartbeat before next operation
+                        yield from send_heartbeat()
+                        
+                        # Try interactive variant detection
+                        interactive_variants = scrape_interactive_variants(
+                            product.product_url, 
+                            log_callback=lambda msg: None,
+                            product_title=product.title
+                        )
+                        
+                        # Send heartbeat after operation
+                        yield from send_heartbeat()
+                        
+                        if interactive_variants and len(interactive_variants) > 0:
+                            yield from send_data({
+                                'status': 'progress', 
+                                'message': f'Found {len(interactive_variants)} variants via interactive detection', 
+                                'step': 4, 
+                                'total': 4
+                            })
+                            # Convert interactive variants to the same format as API variants
+                            variants_data = []
+                            for variant in interactive_variants:
+                                variants_data.append({
+                                    'product_id': main_product_id,
+                                    'sku_id': variant.get('sku_id', f"{main_product_id}_interactive_{len(variants_data)}"),
+                                    'variant_title': variant.get('variant_title'),
+                                    'image_url': variant.get('image_url'),
+                                    'sale_price': variant.get('sale_price'),
+                                    'original_price': variant.get('original_price'),
+                                    'source': 'interactive'
+                                })
+                        else:
+                            yield from send_data({
+                                'status': 'progress', 
+                                'message': 'No variants found with any method', 
+                                'step': 4, 
+                                'total': 4
+                            })
+                            variants_data = []
+            
+            # Save variants to database
+            if variants_data:
+                yield from send_data({
+                    'status': 'progress', 
+                    'message': f'Saving {len(variants_data)} variants to database...'
+                })
+                
+                # Send heartbeat before database operation
+                yield from send_heartbeat()
+                
+                # Convert to format expected by save_results_to_database
+                formatted_data = []
+                for variant_data in variants_data:
+                    formatted_variant = {
+                        'Product ID': variant_data.get('product_id'),
+                        'SKU ID': variant_data.get('sku_id'),
+                        'Title': product.title,
+                        'Variant Title': variant_data.get('variant_title'),
+                        'Image URL': variant_data.get('image_url'),
+                        'Sale Price': variant_data.get('sale_price'),
+                        'Original Price': variant_data.get('original_price'),
+                        'Product URL': product.product_url,
+                        'Currency': product.currency,
+                        'Rating': product.rating,
+                        'Orders Count': product.orders_count,
+                        'Store Name': product.store_name,
+                        'Store ID': product.store_id,
+                        'Store URL': product.store_url
+                    }
+                    formatted_data.append(formatted_variant)
+                
+                saved_count = save_results_to_database(f"variants_{main_product_id}", formatted_data)
+                
+                yield from send_data({
+                    'status': 'completed', 
+                    'message': f'Successfully saved {saved_count} variants!', 
+                    'variants_found': len(variants_data), 
+                    'variants_saved': saved_count
+                })
+            else:
+                yield from send_data({
+                    'status': 'completed', 
+                    'message': 'No variants found for this product', 
+                    'variants_found': 0, 
+                    'variants_saved': 0
+                })
+                
+        except Exception as e:
+            yield from send_data({
+                'status': 'error', 
+                'message': f'Error during variant scraping: {str(e)}'
+            })
+    
+    # Set proper SSE headers
+    response = Response(stream_with_context(generate()), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
+    return response
+
 @app.route('/api/product/<int:product_id>/update', methods=['POST'])
 def api_update_product(product_id):
     """Update a single product and automatically find & track all variants"""
