@@ -543,17 +543,19 @@ def save_results_to_database(keyword, data, track_products=False):
                 original_price = item.get('Original Price')
                 discount = item.get('Discount (%)')
                 
-                # Parse prices if they're strings
+                # Parse prices if they're strings with better error logging
                 if isinstance(sale_price, str):
                     try:
                         sale_price = parse_price_string(sale_price)
-                    except (ValueError, AttributeError):
+                    except (ValueError, AttributeError) as e:
+                        print(f"Warning: Could not parse sale price '{sale_price}' for product {product_id}: {e}")
                         sale_price = None
                 
                 if isinstance(original_price, str):
                     try:
                         original_price = parse_price_string(original_price)
-                    except (ValueError, AttributeError):
+                    except (ValueError, AttributeError) as e:
+                        print(f"Warning: Could not parse original price '{original_price}' for product {product_id}: {e}")
                         original_price = None
                 
                 if sale_price is not None:
@@ -1323,68 +1325,8 @@ def scrape_html_variants(product_url, log_callback=default_logger, product_title
         if product_title:
             search_text += " " + product_title.lower()
         
-        if any(keyword in search_text for keyword in filament_keywords):
-            log_callback("Detected filament product, creating intelligent color variants")
-            
-            variants = []
-            
-            # Special handling for specific product types based on your examples
-            if base_product_id == "1005006594299340":  # ANYCUBIC High Speed PLA
-                log_callback("Creating variants for ANYCUBIC High Speed PLA with realistic colors and images")
-                
-                # Real images from your HTML examples (based on your provided HTML structure)
-                variant_data_list = [
-                    {"color": "1KG yellow", "image": "https://ae-pic-a1.aliexpress-media.com/kf/S3e5e9c37c1f24d6d9710b24c257bf24cl.png_220x220.png_.avif", "price": "12,59€"},
-                    {"color": "1KG pink", "image": "https://ae-pic-a1.aliexpress-media.com/kf/Sb09430a261614cd0878ef376e34e593cE.png_220x220.png_.avif", "price": "11,99€"},
-                    {"color": "1KG orange", "image": "https://ae-pic-a1.aliexpress-media.com/kf/Sf64804bc936944e980979539e48ae17f2.png_220x220.png_.avif", "price": "13,19€"},
-                    {"color": "1KG purple", "image": "https://ae-pic-a1.aliexpress-media.com/kf/S98b5be0e90194210b1558418beb705c8U.png_220x220.png_.avif", "price": "12,79€"},
-                    {"color": "1KG green", "image": "https://ae-pic-a1.aliexpress-media.com/kf/S69f82238bc6b4be0880cd706c3bbba95f.png_220x220.png_.avif", "price": "12,39€"},
-                    {"color": "1KG blue", "image": "https://ae-pic-a1.aliexpress-media.com/kf/Se9245010ebb240fb9f4143a6704baa91k.png_220x220.png_.avif", "price": "12,89€"},
-                    {"color": "1KG red", "image": "https://ae-pic-a1.aliexpress-media.com/kf/See382f6e722d456d9a044e6053de1a12A.png_220x220.png_.avif", "price": "12,99€"},
-                    {"color": "1KG grey", "image": "https://ae-pic-a1.aliexpress-media.com/kf/Sbc54a91579ab40818d6c0310efb1b070I.png_220x220.png_.avif", "price": "12,49€"},
-                    {"color": "1KG black", "image": "https://ae-pic-a1.aliexpress-media.com/kf/S4b0747f9ffd64990b256056b161c2bdeC.png_220x220.png_.avif", "price": "12,69€"},
-                    {"color": "1KG white", "image": "https://ae-pic-a1.aliexpress-media.com/kf/Sdbac94a10a18445db13fd6bba483f93dx.png_220x220.png_.avif", "price": "13,09€"}
-                ]
-                
-                for i, data in enumerate(variant_data_list):
-                    sku_id = f"{base_product_id}_html_{data['color'].replace(' ', '_').replace('KG_', '')}"
-                    variant_data = {
-                        'sku_id': sku_id,
-                        'product_id': base_product_id,
-                        'variant_title': data['color'],
-                        'image_url': data['image'],
-                        'alt_text': data['color'],
-                        'sale_price': data['price'],
-                        'original_price': "25,45€",  # Consistent original price
-                        'source': 'smart_demo'
-                    }
-                    variants.append(variant_data)
-                    log_callback(f"Created intelligent variant: {data['color']} - {data['price']}")
-            else:
-                # Generic filament variants for other products
-                log_callback("Creating generic filament variants")
-                materials = ['PLA', 'PETG', 'TPU']
-                colors = ['Black', 'White', 'Red', 'Blue', 'Green', 'Orange', 'Silver']
-                
-                # Create variants for different material/color combinations
-                for i, material in enumerate(materials):
-                    for j, color in enumerate(colors[:3]):  # Limit to 3 colors per material
-                        sku_id = f"{base_product_id}_html_{material}_{color}"
-                        variant_data = {
-                            'sku_id': sku_id,
-                            'product_id': base_product_id,
-                            'variant_title': f"{material} {color}",
-                            'image_url': f"https://example.com/variant_{material}_{color}.jpg",
-                            'alt_text': f"{material} {color}",
-                            'source': 'html_demo'
-                        }
-                        variants.append(variant_data)
-                        log_callback(f"Created demo variant: {material} {color}")
-            
-            log_callback(f"Created {len(variants)} variants for filament product")
-            return variants
-        
-        log_callback("Product doesn't appear to be a filament product, no demo variants created")
+        # Don't create fake variants! Return empty list if no real variants found
+        log_callback("No real variants found - not creating fake demo variants")
         return []
         
     except Exception as e:
@@ -1447,40 +1389,77 @@ def scrape_real_product_variants(product_id, log_callback=default_logger):
         session_page = SessionPage()
         session_page.set.cookies(cookies)
         
-        # AliExpress product detail API endpoint
-        api_url = 'https://www.aliexpress.com/fn/product/index'
-        
-        headers = BASE_HEADERS.copy()
-        headers['user-agent'] = user_agent
-        headers['referer'] = f'https://www.aliexpress.com/item/{product_id}.html'
-        
-        payload = {
-            "pageVersion": "7ece9c0cc9cf2052db74f0d1b26b7033",
-            "target": "root",
-            "data": {
-                "productId": str(product_id)
-            },
-            "eventName": "onChange",
-            "dependency": []
-        }
-        
-        log_callback("Making API request for product variants...")
-        success = session_page.post(api_url, json=payload, headers=headers)
-        
-        if not success or not session_page.response or session_page.response.status_code != 200:
-            log_callback(f"Failed to fetch product data. Status: {session_page.response.status_code if session_page.response else 'N/A'}")
-            return []
+        # Try first to get the product page and extract initial data
+        product_url = f'https://www.aliexpress.com/item/{product_id}.html'
+        log_callback(f"Loading product page: {product_url}")
         
         try:
-            json_data = session_page.json
-            if not isinstance(json_data, dict):
-                log_callback("Unexpected response format")
+            session_page.get(product_url, timeout=30)
+            if session_page.response.status_code != 200:
+                log_callback(f"Failed to load product page. Status: {session_page.response.status_code}")
+                return []
+        except Exception as e:
+            log_callback(f"Error loading product page: {e}")
+            return []
+        
+        # Try to extract variant data from the loaded page
+        try:
+            page_html = session_page.html
+            if not page_html:
+                log_callback("No HTML content received")
                 return []
             
-            # Extract SKU component data
-            sku_component = json_data.get('data', {}).get('skuComponent', {})
+            # Look for JSON data in script tags
+            import re
+            json_matches = re.findall(r'window\.__INITIAL_STATE__\s*=\s*({.*?});', page_html, re.DOTALL)
+            if not json_matches:
+                json_matches = re.findall(r'window\.runParams\s*=\s*({.*?});', page_html, re.DOTALL)
+            
+            if json_matches:
+                try:
+                    import json
+                    json_data = json.loads(json_matches[0])
+                    log_callback("Successfully extracted JSON data from page")
+                except json.JSONDecodeError as e:
+                    log_callback(f"Failed to parse JSON data: {e}")
+                    json_data = {}
+            else:
+                log_callback("No JSON data found in page, trying fallback methods")
+                return []
+                
+        except Exception as e:
+            log_callback(f"Error extracting data from page: {e}")
+            return []
+        
+        # Try to extract SKU component data from the page JSON
+        try:
+            # Look for SKU component data in various possible locations
+            sku_component = {}
+            
+            # Try multiple paths to find SKU data
+            possible_paths = [
+                ['data', 'skuComponent'],
+                ['skuComponent'],
+                ['globalData', 'skuComponent'],
+                ['state', 'skuComponent']
+            ]
+            
+            for path in possible_paths:
+                temp_data = json_data
+                for key in path:
+                    if isinstance(temp_data, dict) and key in temp_data:
+                        temp_data = temp_data[key]
+                    else:
+                        temp_data = None
+                        break
+                
+                if temp_data:
+                    sku_component = temp_data
+                    log_callback(f"Found SKU component data at path: {' -> '.join(path)}")
+                    break
+            
             if not sku_component:
-                log_callback("No SKU component found in response")
+                log_callback("No SKU component found in page data")
                 return []
             
             variants = []
@@ -1503,56 +1482,126 @@ def scrape_real_product_variants(product_id, log_callback=default_logger):
                 # Get variant image with improved extraction
                 variant_image = None
                 
-                # Try multiple image extraction methods
-                for prop in sku_property_list:
-                    if 'skuPropertyValues' in prop:
-                        for value in prop['skuPropertyValues']:
-                            # Match SKU attribute with property value
-                            if 'skuPropertyImagePath' in value:
-                                prop_id = str(prop.get('skuPropertyId', ''))
-                                value_id = str(value.get('propertyValueId', ''))
-                                if f"{prop_id}:{value_id}" in sku_attr:
-                                    image_path = value['skuPropertyImagePath']
-                                    if image_path:
+                try:
+                    # Try multiple image extraction methods
+                    for prop in sku_property_list:
+                        if 'skuPropertyValues' in prop:
+                            for value in prop['skuPropertyValues']:
+                                # Match SKU attribute with property value
+                                if 'skuPropertyImagePath' in value:
+                                    prop_id = str(prop.get('skuPropertyId', ''))
+                                    value_id = str(value.get('propertyValueId', ''))
+                                    if f"{prop_id}:{value_id}" in sku_attr:
+                                        image_path = value['skuPropertyImagePath']
+                                        if image_path:
+                                            # Normalize image URL
+                                            if image_path.startswith('//'):
+                                                variant_image = 'https:' + image_path
+                                            elif image_path.startswith('http'):
+                                                variant_image = image_path
+                                            else:
+                                                variant_image = 'https://' + image_path
+                                            log_callback(f"Found variant image: {variant_image}")
+                                            break
+                        if variant_image:
+                            break
+                    
+                    # Fallback 1: Check for any image in sku properties
+                    if not variant_image:
+                        for prop in sku_property_list:
+                            if 'skuPropertyValues' in prop:
+                                for value in prop['skuPropertyValues']:
+                                    if 'skuPropertyImagePath' in value and value['skuPropertyImagePath']:
+                                        image_path = value['skuPropertyImagePath']
                                         if image_path.startswith('//'):
                                             variant_image = 'https:' + image_path
                                         elif image_path.startswith('http'):
                                             variant_image = image_path
                                         else:
                                             variant_image = 'https://' + image_path
-                                    break
-                    if variant_image:
-                        break
-                
-                # Fallback: try to get any image from the variant attributes
-                if not variant_image and variant_attributes:
-                    for attr_value in variant_attributes.values():
-                        if 'image' in str(attr_value).lower():
-                            variant_image = attr_value
-                            break
+                                        log_callback(f"Found fallback variant image: {variant_image}")
+                                        break
+                            if variant_image:
+                                break
+                    
+                    # Fallback 2: try to get any image from the variant attributes
+                    if not variant_image and variant_attributes:
+                        for attr_value in variant_attributes.values():
+                            if 'image' in str(attr_value).lower():
+                                variant_image = attr_value
+                                log_callback(f"Found attribute variant image: {variant_image}")
+                                break
+                    
+                    if not variant_image:
+                        log_callback(f"No variant image found for SKU {sku_id}")
+                        
+                except Exception as e:
+                    log_callback(f"Error extracting variant image for SKU {sku_id}: {e}")
+                    variant_image = None
                 
                 # Extract prices with proper formatting and validation
                 sku_val = sku_price.get('skuVal', {})
-                sale_price = sku_val.get('skuCalPrice') or sku_val.get('actSkuCalPrice') or sku_val.get('skuAmount')
-                original_price = sku_val.get('skuPrice') or sku_val.get('skuMultiCurrencyCalPrice')
+                
+                # Try multiple price fields for sale price
+                sale_price = (
+                    sku_val.get('skuCalPrice') or 
+                    sku_val.get('actSkuCalPrice') or 
+                    sku_val.get('skuAmount') or
+                    sku_val.get('skuMultiCurrencyCalPrice') or
+                    sku_val.get('skuPrice')
+                )
+                
+                # Try multiple price fields for original price
+                original_price = (
+                    sku_val.get('skuPrice') or 
+                    sku_val.get('skuMultiCurrencyCalPrice') or
+                    sku_val.get('skuCalPrice')
+                )
+                
                 discount = sku_val.get('discount')
                 
-                # Validate and convert prices
-                if sale_price is not None:
-                    if isinstance(sale_price, (int, float)):
-                        sale_price = f"{sale_price:.2f}"
+                # Validate and convert prices with better error handling
+                try:
+                    if sale_price is not None:
+                        if isinstance(sale_price, (int, float)):
+                            sale_price = f"€ {sale_price:.2f}"
+                        elif isinstance(sale_price, str):
+                            # Try to extract numeric value from string
+                            price_match = re.search(r'[\d.,]+', str(sale_price))
+                            if price_match:
+                                price_num = float(price_match.group().replace(',', '.'))
+                                sale_price = f"€ {price_num:.2f}"
+                            else:
+                                sale_price = str(sale_price)
+                        else:
+                            sale_price = str(sale_price)
+                        log_callback(f"Extracted sale price: {sale_price}")
                     else:
-                        sale_price = str(sale_price)
-                else:
+                        log_callback(f"No sale price found for SKU {sku_id}")
+                        sale_price = None
+                        
+                    if original_price is not None:
+                        if isinstance(original_price, (int, float)):
+                            original_price = f"€ {original_price:.2f}"
+                        elif isinstance(original_price, str):
+                            # Try to extract numeric value from string
+                            price_match = re.search(r'[\d.,]+', str(original_price))
+                            if price_match:
+                                price_num = float(price_match.group().replace(',', '.'))
+                                original_price = f"€ {price_num:.2f}"
+                            else:
+                                original_price = str(original_price)
+                        else:
+                            original_price = str(original_price)
+                        log_callback(f"Extracted original price: {original_price}")
+                    else:
+                        original_price = sale_price  # Use sale price as fallback
+                        log_callback(f"Using sale price as original price fallback: {original_price}")
+                        
+                except Exception as e:
+                    log_callback(f"Error processing prices for SKU {sku_id}: {e}")
                     sale_price = None
-                    
-                if original_price is not None:
-                    if isinstance(original_price, (int, float)):
-                        original_price = f"{original_price:.2f}"
-                    else:
-                        original_price = str(original_price)
-                else:
-                    original_price = sale_price  # Use sale price as fallback
+                    original_price = None
                 
                 variant_data = {
                     'sku_id': sku_id,
