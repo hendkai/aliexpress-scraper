@@ -1,0 +1,54 @@
+{
+  "success": true,
+  "product_id": "1005008204179129",
+  "title": null,
+  "price": null,
+  "variants": [
+    {
+      "sku_id": "1005008204179129_dcdata_0",
+      "product_id": "1005008204179129",
+      "image_url": "https://ae01.alicdn.com/kf/S842af8715d744a1582d33171b8308b13a.jpg",
+      "variant_title": "Variant 1",
+      "source": "dcdata_images"
+    },
+    {
+      "sku_id": "1005008204179129_dcdata_1",
+      "product_id": "1005008204179129",
+      "image_url": "https://ae01.alicdn.com/kf/Se1a0b6ce455f452cae3b73b09ffa5aa4h.jpg",
+      "variant_title": "Variant 2",
+      "source": "dcdata_images"
+    },
+    {
+      "sku_id": "1005008204179129_dcdata_2",
+      "product_id": "1005008204179129",
+      "image_url": "https://ae01.alicdn.com/kf/Se5580d6e8ee14c829c047e6312aaff34w.jpg",
+      "variant_title": "Variant 3",
+      "source": "dcdata_images"
+    },
+    {
+      "sku_id": "1005008204179129_dcdata_3",
+      "product_id": "1005008204179129",
+      "image_url": "https://ae01.alicdn.com/kf/S7ba16be54d4e44afb1b6e3db2be2772dH.jpg",
+      "variant_title": "Variant 4",
+      "source": "dcdata_images"
+    },
+    {
+      "sku_id": "1005008204179129_dcdata_4",
+      "product_id": "1005008204179129",
+      "image_url": "https://ae01.alicdn.com/kf/Sd9e5435462c04621b75d016a87f6b8479.jpg",
+      "variant_title": "Variant 5",
+      "source": "dcdata_images"
+    },
+    {
+      "sku_id": "1005008204179129_dcdata_5",
+      "product_id": "1005008204179129",
+      "image_url": "https://ae01.alicdn.com/kf/S54fae77cc75b4b1a80a895d8020283dcd.jpg",
+      "variant_title": "Variant 6",
+      "source": "dcdata_images"
+    }
+  ],
+  "variants_count": 6,
+  "load_time": 2.6028354167938232,
+  "csr_loaded": false,
+  "timestamp": "2025-10-18T09:50:20.213558"
+}

@@ -113,9 +113,8 @@ def initialize_session_data(keyword, log_callback=default_logger):
     browser_page = None
     try:
         co = ChromiumOptions()
-        co.no_imgs(True)
-        # --- Block CSS ---
-        co.set_pref('permissions.default.stylesheet', 2)
+        co.no_imgs(False)  # ANTI-BOT: Don't block images
+        # Don't block CSS - AliExpress detects this as bot behavior
         co.headless()
         user_agent_string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
         co.set_user_agent(user_agent_string)

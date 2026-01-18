@@ -590,6 +590,7 @@ def stream_variant_scrape(product_id):
             })
             
             from scraper import scrape_real_product_variants, scrape_enhanced_variants, scrape_interactive_variants, save_results_to_database
+            from variant_debug_improvements import scrape_variants_with_detailed_logging
             
             # Extract main product ID from product_id field
             main_product_id = product.product_id
@@ -707,11 +708,50 @@ def stream_variant_scrape(product_id):
                         else:
                             yield from send_data({
                                 'status': 'progress', 
-                                'message': 'No variants found with any method', 
+                                'message': 'Trying DETAILED LOGGING variant detection...', 
                                 'step': 4, 
-                                'total': 4
+                                'total': 5
                             })
-                            variants_data = []
+                            
+                            # Send heartbeat before detailed detection
+                            yield from send_heartbeat()
+                            
+                            # Try detailed logging variant detection
+                            detailed_variants = scrape_variants_with_detailed_logging(
+                                product.product_url,
+                                log_callback=lambda msg: None
+                            )
+                            
+                            # Send heartbeat after operation
+                            yield from send_heartbeat()
+                            
+                            if detailed_variants and len(detailed_variants) > 0:
+                                yield from send_data({
+                                    'status': 'progress', 
+                                    'message': f'Found {len(detailed_variants)} variants via detailed detection', 
+                                    'step': 5, 
+                                    'total': 5
+                                })
+                                # Convert detailed variants to the same format
+                                variants_data = []
+                                for variant in detailed_variants:
+                                    variants_data.append({
+                                        'product_id': main_product_id,
+                                        'sku_id': variant.get('sku_id', f"{main_product_id}_detailed_{len(variants_data)}"),
+                                        'variant_title': variant.get('variant_title'),
+                                        'image_url': variant.get('image_url'),
+                                        'sale_price': variant.get('sale_price'),
+                                        'original_price': variant.get('original_price'),
+                                        'source': 'detailed_logging'
+                                    })
+                            else:
+                                yield from send_data({
+                                    'status': 'progress', 
+                                    'message': 'No variants found with any method', 
+                                    'step': 5, 
+                                    'total': 5
+                                })
+                                variants_data = []
             
             # Save variants to database
             if variants_data:
