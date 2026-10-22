@@ -1,4 +1,5 @@
 import time
+import random
 import json
 import os
 import csv
@@ -34,6 +35,18 @@ BASE_HEADERS = {
     'sec-fetch-site': 'same-origin',
     'user-agent': 'Mozilla/5.0 ...',
 }
+
+MAX_RETRIES = 3
+REQUEST_TIMEOUT = 20  # seconds per API request
+
+BLOCK_MARKERS = ('punish', 'x5secdata', '_____tmd_____', 'captcha', 'slide to verify', 'unusual traffic')
+
+def _looks_blocked(text):
+    """True if the response looks like an anti-bot/captcha page instead of JSON."""
+    if not text:
+        return True
+    head = text[:2000].lower()
+    return any(m in head for m in BLOCK_MARKERS)
 
 def default_logger(message):
     print(message)
@@ -129,8 +142,8 @@ def initialize_session_data(keyword, log_callback=default_logger):
 
         search_url = f'https://www.aliexpress.com/w/wholesale-{quote_plus(keyword)}.html'
         log_callback(f"Visiting initial search page (eager load, images and CSS blocked): {search_url}")
-        browser_page.get(search_url)
-
+        browser_page.get(search_url, timeout=30)
+        time.sleep(random.uniform(2, 4))  # let anti-bot JS set its cookies
         log_callback("Extracting fresh cookies and user agent...")
         fresh_cookies = browser_page.cookies().as_dict()
         fresh_user_agent = browser_page.user_agent
@@ -233,14 +246,49 @@ def scrape_aliexpress_data(keyword, max_pages, cookies, user_agent,
         if price_range_str:
             payload['data']['pr'] = price_range_str
 
-        # Make the POST request
-        success = session_page.post(API_URL, json=payload, headers=request_headers)
+        # Make the POST request with retry/backoff and block detection
+        ok = False
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                success = session_page.post(API_URL, json=payload, headers=request_headers,
+                                            timeout=REQUEST_TIMEOUT)
+            except Exception as e:
+                success = False
+                log_callback(f"Request error on page {current_page_num} (attempt {attempt}/{MAX_RETRIES}): {e}")
 
-        if not success or not session_page.response or session_page.response.status_code != 200:
-            status = session_page.response.status_code if session_page.response else 'N/A'
-            log_callback(f"Failed to fetch page {current_page_num}. Status code: {status}")
-            if session_page.response:
-                log_callback(f"Response text sample: {session_page.response.text[:200]}")
+            resp = session_page.response
+            if success and resp is not None and resp.status_code == 200 and not _looks_blocked(resp.text):
+                ok = True
+                break
+
+            status = resp.status_code if resp is not None else 'N/A'
+            blocked = resp is not None and (status in (403, 429) or _looks_blocked(resp.text))
+            log_callback(f"Page {current_page_num} failed (status {status}, blocked={blocked}, "
+                         f"attempt {attempt}/{MAX_RETRIES})")
+            if attempt == MAX_RETRIES:
+                if resp is not None:
+                    log_callback(f"Response text sample: {resp.text[:200]}")
+                break
+
+            # Exponential backoff with jitter; on block also throw away the session
+            wait = min(60, (2 ** attempt) * 3) + random.uniform(0, 3)
+            log_callback(f"Waiting {wait:.1f}s before retry...")
+            time.sleep(wait)
+            if blocked:
+                try:
+                    if os.path.exists(SESSION_CACHE_FILE):
+                        os.remove(SESSION_CACHE_FILE)
+                    cookies, user_agent = initialize_session_data(keyword, log_callback)
+                    session_page = SessionPage()
+                    session_page.set.cookies(cookies)
+                    current_base_headers['user-agent'] = user_agent
+                    request_headers['user-agent'] = user_agent
+                    log_callback("Fresh session created after block.")
+                except Exception as e:
+                    log_callback(f"Could not refresh session: {e}")
+
+        if not ok:
+            log_callback(f"Giving up on page {current_page_num}; keeping {len(all_products_raw)} products collected so far.")
             break
 
         try:
@@ -274,8 +322,8 @@ def scrape_aliexpress_data(keyword, max_pages, cookies, user_agent,
             log_callback(f"An error occurred processing page {current_page_num}: {e}")
             break
 
-        # Delay between requests
-        time.sleep(delay)
+        # Randomized delay between requests (human-like, avoids fixed rhythm)
+        time.sleep(delay * random.uniform(0.7, 1.8))
 
     log_callback(f"\nAPI Scraping finished for product: '{keyword}'. Total raw products collected: {len(all_products_raw)}")
     return all_products_raw
