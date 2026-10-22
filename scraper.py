@@ -409,13 +409,13 @@ def extract_variant_from_title(title):
     # If no priority match, return the first variant found
     return variants[0]
 
-def extract_product_details(raw_products, selected_fields):
+def extract_product_details(raw_products, selected_fields, keep_all=False):
     """
     Extracts and formats desired fields from the raw product data,
     based on the user's selection, including variant information.
     """
     extracted_data = []
-    if not raw_products or not selected_fields:
+    if not raw_products or (not selected_fields and not keep_all):
         return extracted_data
     for product in raw_products:
         # --- Extract ALL possible fields first ---
@@ -496,7 +496,10 @@ def extract_product_details(raw_products, selected_fields):
             'Image URL': image_url,
         }
 
-        filtered_item = {field: full_details.get(field) for field in selected_fields}
+        if keep_all:
+            filtered_item = dict(full_details)
+        else:
+            filtered_item = {field: full_details.get(field) for field in selected_fields}
 
         extracted_data.append(filtered_item)
 
@@ -710,13 +713,15 @@ def run_scrape_job(keyword, pages, apply_discount, free_shipping, min_price, max
         
         yield "data: Extracting product details...\n\n"
         extracted_data = extract_product_details(raw_products, selected_fields)
+        # DB always gets the complete data (image, SKU, store...), the field selection only affects the backup file
+        db_data = extract_product_details(raw_products, selected_fields, keep_all=True)
         
         yield "data: Saving results...\n\n"
         if save_to_db:
             # Count existing products before update
             existing_count = Product.query.filter_by(is_active=True).count()
             
-            db_count = save_results_to_database(keyword, extracted_data, track_products=track_products)
+            db_count = save_results_to_database(keyword, db_data, track_products=track_products)
             
             # Count new products after update
             new_count = Product.query.filter_by(is_active=True).count()
